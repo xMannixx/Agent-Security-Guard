@@ -1,0 +1,5 @@
+name: agent-security-guard-plugin
+version: 0.1.0
+description: "Runtime transition guard for Hermes/OpenClaw. Wraps untrusted web/tool content as data via pre_llm_call, and evaluates planned tool calls (action + sequence policy) via pre_tool_call, returning machine-readable allow/deny/transform/require_confirmation decisions with audit."
+author: xMannixx
+kind: security

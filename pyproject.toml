@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-security-guard"
+version = "0.1.0"
+description = "A deterministic transition policy engine for Hermes/OpenClaw agents that strips command-authority from untrusted content while keeping reading and summarizing free."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file = "LICENSE" }
+authors = [{ name = "xMannixx" }]
+keywords = [
+    "security",
+    "prompt-injection",
+    "policy-engine",
+    "llm-agents",
+    "hermes",
+    "openclaw",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+]
+# Runtime dependencies: none. The package is pure standard library.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.urls]
+Homepage = "https://github.com/xMannixx/Agent-Security-Guard"
+Repository = "https://github.com/xMannixx/Agent-Security-Guard"
+Issues = "https://github.com/xMannixx/Agent-Security-Guard/issues"
+
+[project.scripts]
+agent-security-guard = "agent_security_guard.__main__:main"
+
+[tool.setuptools]
+package-dir = { "" = "security/agent-security-guard/src" }
+
+[tool.setuptools.packages.find]
+where = ["security/agent-security-guard/src"]
+
+[tool.pytest.ini_options]
+testpaths = ["security/agent-security-guard/tests"]

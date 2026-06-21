@@ -1,0 +1,83 @@
+# agent-security-guard default policy
+# Mode: autonomous-safe -> reading/browsing/summarizing stay free;
+# only risky transitions (exec, install, external write, secret handling,
+# privileged memory) are gated. Hard rules win over the risk score.
+mode: autonomous-safe
+
+# Domains the agent may write to / install from with only a confirmation
+# (instead of an outright deny). Empty by default = nothing pre-trusted.
+domain_allowlist: []
+
+# Per-tier default decisions. Hard rules in policy.py can override these
+# (a hard deny is never softened by a tier default).
+tiers:
+  read_only: allow
+  local_read: allow
+  external_write: require_confirmation
+  shell_from_user: require_confirmation
+  shell_from_untrusted: deny
+  install_from_user: require_confirmation
+  install_from_untrusted: deny
+  config_change: require_confirmation
+  memory_external_to_evidence: allow_with_warning
+  memory_external_to_identity: require_confirmation
+  memory_external_to_authorization: deny
+  memory_external_to_procedural: deny
+  download_inspect: allow
+  download_then_execute_untrusted: deny
+  download_then_execute_user: require_confirmation
+
+# Glob-style sensitive paths. A match raises DataSensitivity; reads are still
+# allowed (LOCAL_READ) but flow into secret-aware sequence/exfil rules.
+sensitive_paths:
+  - ".env"
+  - ".env.*"
+  - "*.pem"
+  - "*.key"
+  - "*.crt"
+  - "*.p12"
+  - "*.pfx"
+  - "*.kdbx"
+  - "*.sqlite"
+  - "*.db"
+  - "id_rsa"
+  - "id_rsa.*"
+  - ".ssh/"
+  - ".aws/"
+  - ".gcp/"
+  - ".azure/"
+  - ".kube/"
+  - ".npmrc"
+  - ".pypirc"
+  - ".netrc"
+  - ".git-credentials"
+  - "secrets.*"
+  - "credentials.*"
+  - "token.*"
+  - "auth.*"
+  - "*.log"
+  - "logs/"
+  - "backups/"
+  - "docker-compose.yml"
+  - "settings.json"
+  - "config.py"
+
+# Regex patterns that mark content as secret-sensitive even inside an
+# otherwise-harmless file. Used by the content scanner (Sprint 2).
+secret_patterns:
+  - "(?i)api[_-]?key"
+  - "(?i)secret[_-]?key"
+  - "(?i)access[_-]?token"
+  - "(?i)bearer\\s+[A-Za-z0-9._-]{12,}"
+  - "AKIA[0-9A-Z]{16}"
+  - "-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----"
+  - "(?i)password\\s*[:=]"
+
+audit:
+  backend: sqlite
+  path: "guard-audit.db"
+  jsonl_path: "guard-audit.jsonl"
+
+limits:
+  max_content_chars: 20000
+  max_history_events: 50
