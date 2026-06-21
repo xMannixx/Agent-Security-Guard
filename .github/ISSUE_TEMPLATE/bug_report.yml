@@ -1,0 +1,45 @@
+name: Bug report
+description: Report incorrect or unsafe guard behavior
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping harden agent-security-guard.
+
+        Do **not** report a security vulnerability here — see
+        [SECURITY.md](../blob/main/SECURITY.md) for private disclosure.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did the guard decide, and what did you expect instead?
+      placeholder: |
+        Action: ...
+        Context (origin_trust / data_sensitivity / user_intent_origin): ...
+        Got: decision=... reason_code=...
+        Expected: decision=... reason_code=...
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: A short snippet or CLI invocation that reproduces it.
+      render: python
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      placeholder: "v0.1.0 or commit SHA"
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: "3.11"
+    validations:
+      required: true

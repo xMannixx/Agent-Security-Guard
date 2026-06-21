@@ -1,0 +1,27 @@
+name: Feature request
+description: Propose a new rule, defense, or capability
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / threat
+      description: What gap or threat class does this address?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: |
+        Which transition is affected, and what should the decision +
+        reason_code be? Remember the project invariants: hard rules before
+        score, two separate axes, fail safe, stdlib-only.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false

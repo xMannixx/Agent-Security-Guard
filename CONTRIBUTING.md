@@ -7,14 +7,15 @@ stay deterministic and fail safe.**
 ## Dev setup
 
 ```bash
-git clone <repo>
-cd "Agent Security Guard/security/agent-security-guard"
-python -m pip install pytest      # only dev dependency; runtime is stdlib-only
-python -m pytest tests -v
+git clone https://github.com/xMannixx/Agent-Security-Guard.git
+cd Agent-Security-Guard
+python -m pip install -e ".[dev]"   # pytest only; runtime is stdlib-only
+python -m pytest                    # or: make test
 ```
 
 Python 3.8+ . No runtime dependencies may be added — the skill must stay
-stdlib-only.
+stdlib-only. See [docs/INSTALLATION.md](docs/INSTALLATION.md) for all install
+modes.
 
 ## Principles to preserve
 
