@@ -4,6 +4,59 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-06-22
+
+Self-modification governance: close the unauthorized self-improvement / skill
+patch hole, where the agent could rewrite its own `SKILL.md` / procedural rules
+without an explicit user order, off a bare "yes", or even under an explicit
+no-write scope.
+
+### Added
+
+- **`ActionTier.SELF_MODIFICATION`** for skill patch/create/delete/edit,
+  self-improvement, and procedural-rule approve/retire. It is **never a direct
+  allow** — at most `require_confirmation`. (`skill_install` stays `INSTALL`.)
+- **User-scope gates** that run before any per-tier rule for every
+  state-changing action:
+  - explicit no-write scope (`no_write_scope_active`) →
+    `EXPLICIT_NO_WRITE_SCOPE_VIOLATION`;
+  - ambiguous short confirmation (`short_confirmation`) without a prior explicit
+    authorization → `SHORT_CONFIRMATION_NO_PRIOR_AUTH`, or from a non-user source
+    → `SHORT_CONFIRMATION_NONAUTHORITATIVE_SOURCE`.
+- Four `GuardContext` fields: `no_write_scope_active`, `short_confirmation`,
+  `previous_action_was_explicitly_authorized`,
+  `requested_action_from_nonuser_context` (all default to the safe value, so the
+  gates only ever add denials).
+- **Two-phase, hash-bound self-improvement gate**
+  (`agent_security_guard.self_improvement`): `propose` evaluates and writes
+  nothing; `confirm` writes only on a matching `action_hash`, a real
+  confirmation, no active no-write scope, non-`nonuser` provenance, and a
+  non-`deny` final check. Fail-closed on guard error / hash mismatch.
+- Conservative DE+EN text helpers `detect_no_write_scope` /
+  `is_short_confirmation` for hosts that can only pass a raw `user_message`.
+- New reason codes: `SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER`,
+  `SELF_MODIFICATION_REQUIRES_EXPLICIT_TARGET`,
+  `SELF_MODIFICATION_REQUIRES_CONFIRMATION`, plus the three scope codes above.
+- Host-integration contract: [references/self-modification.md](security/agent-security-guard/references/self-modification.md);
+  threat class 7 added to the threat model.
+
+### Changed
+
+- `GuardAdapter.guard_action` accepts an `event_type` keyword so self-improvement
+  decisions are audited as `self_improvement` (block reasons are logged).
+- Plugin `pre_tool_call` reads the new scope kwargs (`no_write_scope`,
+  `short_confirmation`, `previous_action_authorized`,
+  `action_from_nonuser_context`) and falls back to the text helpers from
+  `user_message`.
+
+### Tests
+
+- 28 new tests (180 total), including `tests/test_self_improvement_e2e.py`: under
+  a no-write scope and under an ambiguous short confirmation a real
+  `self_improvement_patch` is denied and the target `SKILL.md` stays
+  byte-identical; the two-phase positive writes while hash mismatch and bare-yes
+  confirm do not.
+
 ## [0.1.0] - 2026-06-22
 
 First public release. Feature-complete across five sprints (see the per-sprint

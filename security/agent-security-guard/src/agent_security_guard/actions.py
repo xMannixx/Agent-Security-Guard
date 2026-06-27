@@ -47,6 +47,19 @@ _KIND_TIER = {
     "config_change": ActionTier.CONFIG_CHANGE,
     "profile_change": ActionTier.CONFIG_CHANGE,
     "settings_write": ActionTier.CONFIG_CHANGE,
+    # Self-modification: changes the agent's own future behavior. Higher-risk
+    # than a normal file write, so it gets its own tier. (skill_install stays
+    # INSTALL: that is a supply-chain concern, handled by the install rules.)
+    "skill_patch": ActionTier.SELF_MODIFICATION,
+    "skill_create": ActionTier.SELF_MODIFICATION,
+    "skill_delete": ActionTier.SELF_MODIFICATION,
+    "skill_edit": ActionTier.SELF_MODIFICATION,
+    "skill_write": ActionTier.SELF_MODIFICATION,
+    "self_improvement": ActionTier.SELF_MODIFICATION,
+    "self_improvement_patch": ActionTier.SELF_MODIFICATION,
+    "procedural_rule_approve": ActionTier.SELF_MODIFICATION,
+    "procedural_rule_retire": ActionTier.SELF_MODIFICATION,
+    "rule_approve": ActionTier.SELF_MODIFICATION,
     "read_file": ActionTier.LOCAL_READ,
     "read": ActionTier.LOCAL_READ,
     "cat": ActionTier.LOCAL_READ,

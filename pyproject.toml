@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-security-guard"
-version = "0.1.0"
+version = "0.2.0"
 description = "A deterministic transition policy engine for Hermes/OpenClaw agents that strips command-authority from untrusted content while keeping reading and summarizing free."
 readme = "README.md"
 requires-python = ">=3.8"

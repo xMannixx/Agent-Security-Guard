@@ -33,6 +33,24 @@ Each class maps to a deterministic outcome, covered by
 | 4 | Tool manipulation | A "tool" returns web content / forged payload | `source_kind` inheritance: web-fetch payload is `external_web`, not trusted tool knowledge; shell from it denied | `UNTRUSTED_TO_SHELL` |
 | 5 | Supply-chain instruction | Untrusted content says "install this skill/package" | Install from untrusted is denied; from a user it requires confirmation | `INSTALL_FROM_UNTRUSTED` |
 | 6 | Unexpected code execution | Web -> shell, or download -> execute | Untrusted -> execution denied; untrusted download -> execute denied (user download -> confirm) | `UNTRUSTED_TO_SHELL`, `DOWNLOAD_THEN_EXECUTE` |
+| 7 | Unauthorized self-modification | Agent patches its own `SKILL.md` / procedural rules without an explicit user order, or off a bare "yes" / under a no-write scope | `SELF_MODIFICATION` tier is never a direct allow; no-write scope and ambiguous-confirmation gates deny first; a write needs an explicit, hash-bound confirmation (two-phase) | `EXPLICIT_NO_WRITE_SCOPE_VIOLATION`, `SHORT_CONFIRMATION_NO_PRIOR_AUTH`, `SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER` |
+
+## Self-modification governance
+
+Patching a skill or approving a procedural rule changes the agent's *future*
+behavior, so it is held to a stricter standard than a normal file write
+(`ActionTier.SELF_MODIFICATION`):
+
+- Two user-scope gates run before any per-tier rule, for every state-changing
+  action: an explicit **no-write scope** (`no_write_scope_active`) hard-denies,
+  and an **ambiguous short confirmation** (`short_confirmation`) denies unless
+  it traces back to a prior explicit authorization for this exact action.
+- Self-modification is **never a direct allow**. With an explicit order it is at
+  most `require_confirmation` — which is a *pending intent*, not a write grant.
+- The host must route self-improvement through the guard and apply the
+  **two-phase, hash-bound** confirm flow. The full contract (and why ASG alone
+  cannot enforce the host step) is in
+  [self-modification.md](self-modification.md).
 
 ## The confirmation-origin rule
 

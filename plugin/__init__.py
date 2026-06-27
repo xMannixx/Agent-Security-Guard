@@ -44,6 +44,8 @@ try:
         GuardAdapter,
         OriginTrust,
         UserIntentOrigin,
+        detect_no_write_scope,
+        is_short_confirmation,
         load_config,
     )
 except Exception as exc:  # pragma: no cover - exercised only on broken installs
@@ -217,6 +219,7 @@ def _extract_action(kwargs: Dict[str, Any]):
 
 
 def _extract_context(kwargs: Dict[str, Any], config) -> GuardContext:
+    no_write, short_conf = _scope_flags(kwargs)
     return GuardContext(
         mode=config.mode,
         origin_trust=_enum(OriginTrust, kwargs.get("origin_trust"), OriginTrust.UNKNOWN),
@@ -226,7 +229,32 @@ def _extract_context(kwargs: Dict[str, Any], config) -> GuardContext:
         chain_id=kwargs.get("chain_id"),
         domain_allowlist=config.domain_allowlist,
         config=config,
+        no_write_scope_active=no_write,
+        short_confirmation=short_conf,
+        previous_action_was_explicitly_authorized=bool(
+            kwargs.get("previous_action_authorized", False)
+        ),
+        requested_action_from_nonuser_context=bool(
+            kwargs.get("action_from_nonuser_context", False)
+        ),
     )
+
+
+def _scope_flags(kwargs: Dict[str, Any]) -> tuple:
+    """Resolve no-write-scope / short-confirmation flags.
+
+    Explicit kwargs win. If they are absent but a raw ``user_message`` is
+    provided, fall back to the conservative text helpers so a host that cannot
+    set the flags still gets the gate (fail-safe direction only).
+    """
+    user_message = kwargs.get("user_message") or ""
+    no_write = kwargs.get("no_write_scope")
+    if no_write is None:
+        no_write = detect_no_write_scope(user_message) if user_message else False
+    short_conf = kwargs.get("short_confirmation")
+    if short_conf is None:
+        short_conf = is_short_confirmation(user_message) if user_message else False
+    return bool(no_write), bool(short_conf)
 
 
 def _enum(enum_cls, value, default):

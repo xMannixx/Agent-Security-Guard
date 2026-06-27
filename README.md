@@ -157,7 +157,17 @@ No runtime dependencies — pure stdlib. `pytest` only for development.
 
 ## Status & roadmap
 
-v0.1.0 — all five sprints complete and green (152 tests): policy core, scanner +
+v0.2.0 — self-modification governance (180 tests green). Skill patch /
+self-improvement / procedural-rule changes are a dedicated `SELF_MODIFICATION`
+tier that is never a direct allow; an explicit no-write scope or an ambiguous
+"yes" is denied before any per-tier rule; and real writes require an explicit,
+hash-bound two-phase confirmation. The end-to-end bar
+([tests/test_self_improvement_e2e.py](security/agent-security-guard/tests/test_self_improvement_e2e.py))
+proves a patch is denied and `SKILL.md` stays byte-identical under a no-write
+scope and an ambiguous confirmation. Host wiring is the
+[self-modification contract](security/agent-security-guard/references/self-modification.md).
+
+v0.1.0 — all five sprints complete and green: policy core, scanner +
 boundary wrapper, sequence + audit, memory bridge + CLI + plugin, and docs +
 threat regression. A Bugbot + security-review hardening pass closed five
 findings (exfil-chain sensitivity inference, fail-closed plugin hooks,

@@ -63,7 +63,11 @@ class GuardAdapter:
         return report, wrap_untrusted(report)
 
     def guard_action(
-        self, action: AgentAction, context: GuardContext
+        self,
+        action: AgentAction,
+        context: GuardContext,
+        *,
+        event_type: str = "tool_call",
     ) -> GuardDecision:
         """Run the action policy and the sequence policy; stricter wins.
 
@@ -71,6 +75,10 @@ class GuardAdapter:
         secret-bearing payload) and merged with any caller-supplied value, so
         a host that omits ``data_sensitivity`` still gets correct
         secret-read / exfiltration handling.
+
+        ``event_type`` lets callers tag the audit record (e.g.
+        ``"self_improvement"`` for skill-patch gating) without changing the
+        decision logic.
         """
         context = self._enrich_sensitivity(action, context)
         tier = classify_action(action)
@@ -82,7 +90,7 @@ class GuardAdapter:
 
         if self.audit is not None and (final.audit_required or final.decision is not Decision.ALLOW):
             self.audit.record(
-                build_event("tool_call", final, action=action, tier=tier, context=context)
+                build_event(event_type, final, action=action, tier=tier, context=context)
             )
         return final
 

@@ -204,11 +204,41 @@ def _suggested_by_untrusted(context: GuardContext) -> bool:
 # Hard-rule matrix
 # --------------------------------------------------------------------------- #
 
+# Tiers that change state (local, remote, or the agent's own behavior). The
+# user-scope gates below apply only to these; read-only tiers always pass.
+STATE_CHANGING_TIERS = frozenset(
+    {
+        ActionTier.EXECUTION,
+        ActionTier.INSTALL,
+        ActionTier.EXTERNAL_WRITE,
+        ActionTier.CONFIG_CHANGE,
+        ActionTier.MEMORY_WRITE,
+        ActionTier.SELF_MODIFICATION,
+        ActionTier.DOWNLOAD,
+        ActionTier.SECRET_HANDLING,
+    }
+)
+
+
+def is_state_changing(tier: ActionTier) -> bool:
+    return tier in STATE_CHANGING_TIERS
+
 
 def decide_action(
     action: AgentAction, tier: ActionTier, context: GuardContext
 ) -> GuardDecision:
-    """Evaluate the deterministic hard-rule matrix for a single action."""
+    """Evaluate the deterministic hard-rule matrix for a single action.
+
+    User-scope gates run first and apply to every state-changing tier:
+    an explicit no-write scope, or an ambiguous short confirmation that does
+    not trace back to a prior explicit authorization, hard-denies before any
+    per-tier allow rule can fire.
+    """
+    if is_state_changing(tier):
+        scope_decision = _decide_user_scope_gates(context)
+        if scope_decision is not None:
+            return scope_decision
+
     if tier is ActionTier.READ_ONLY:
         return _allow(ReasonCode.ALLOW_READ_ONLY, "Read-only action; allowed.")
 
@@ -237,6 +267,9 @@ def decide_action(
     if tier is ActionTier.CONFIG_CHANGE:
         return _decide_config_change(context)
 
+    if tier is ActionTier.SELF_MODIFICATION:
+        return _decide_self_modification(action, context)
+
     if tier is ActionTier.SECRET_HANDLING:
         return _deny(
             ReasonCode.SECRET_EXTERNAL_SEND,
@@ -248,6 +281,75 @@ def decide_action(
         Decision.REQUIRE_CONFIRMATION,
         ReasonCode.UNKNOWN_ACTION_REQUIRES_CONFIRMATION,
         "Unclassified action; requires explicit human confirmation.",
+    )
+
+
+def _decide_user_scope_gates(context: GuardContext) -> Optional[GuardDecision]:
+    """Gates that apply to every state-changing action, before per-tier rules.
+
+    Returns a denial when the user scope forbids the action, else ``None`` so
+    the normal per-tier logic continues.
+    """
+    # Gate 1: an explicit no-write scope set by the user for this turn.
+    if context.no_write_scope_active:
+        return _deny(
+            ReasonCode.EXPLICIT_NO_WRITE_SCOPE_VIOLATION,
+            "User set an explicit no-write scope this turn; state-changing "
+            "action denied.",
+        )
+
+    # Gate 2: an ambiguous short confirmation ("ja", "ok", "mach das").
+    # It only authorizes when it traces back to a prior explicit user order
+    # for this exact action. A non-user source (document/tool/agent inference)
+    # can never become authorization via a later "yes".
+    if context.short_confirmation:
+        if context.requested_action_from_nonuser_context:
+            return _deny(
+                ReasonCode.SHORT_CONFIRMATION_NONAUTHORITATIVE_SOURCE,
+                "Short confirmation relays an action proposed by a "
+                "non-user source; denied.",
+            )
+        if not context.previous_action_was_explicitly_authorized:
+            return _deny(
+                ReasonCode.SHORT_CONFIRMATION_NO_PRIOR_AUTH,
+                "Short confirmation without a prior explicit user "
+                "authorization; denied.",
+            )
+    return None
+
+
+def _decide_self_modification(
+    action: AgentAction, context: GuardContext
+) -> GuardDecision:
+    """Skill patch / self-improvement / procedural-rule changes.
+
+    Never a direct ``allow``: the agent must never silently rewrite its own
+    future behavior. A bare confirmation only counts when it is bound to a
+    prior explicit user order (see the two-phase confirm flow in
+    ``self_improvement.py``). ``require_confirmation`` is a pending intent,
+    not a write grant.
+    """
+    authorized = context.user_intent_origin is UserIntentOrigin.HUMAN_EXPLICIT or (
+        context.user_intent_origin is UserIntentOrigin.HUMAN_CONFIRMATION
+        and context.previous_action_was_explicitly_authorized
+        and not context.requested_action_from_nonuser_context
+    )
+    if not authorized:
+        return _deny(
+            ReasonCode.SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER,
+            "Self-modification requires an explicit user order; agent-initiated "
+            "or unauthorized self-improvement is denied.",
+        )
+    if not (action.target or "").strip():
+        return _deny(
+            ReasonCode.SELF_MODIFICATION_REQUIRES_EXPLICIT_TARGET,
+            "Self-modification requires an explicit, concrete target.",
+        )
+    return _decide(
+        Decision.REQUIRE_CONFIRMATION,
+        ReasonCode.SELF_MODIFICATION_REQUIRES_CONFIRMATION,
+        "Self-modification authorized in principle; requires explicit "
+        "confirmation bound to this exact patch before any write.",
     )
 
 

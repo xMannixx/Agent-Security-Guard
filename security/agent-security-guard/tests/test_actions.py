@@ -35,6 +35,28 @@ def test_memory_and_config():
     assert classify_action(AgentAction(kind="config_change")) is ActionTier.CONFIG_CHANGE
 
 
+def test_self_modification_kinds():
+    for kind in (
+        "skill_patch",
+        "skill_create",
+        "skill_delete",
+        "skill_edit",
+        "self_improvement",
+        "self_improvement_patch",
+        "procedural_rule_approve",
+        "procedural_rule_retire",
+        "rule_approve",
+    ):
+        assert (
+            classify_action(AgentAction(kind=kind, target="communication-style/SKILL.md"))
+            is ActionTier.SELF_MODIFICATION
+        ), kind
+
+
+def test_skill_install_stays_install_not_self_modification():
+    assert classify_action(AgentAction(kind="skill_install", target="pkg")) is ActionTier.INSTALL
+
+
 def test_unknown_kind_fails_safe_to_unknown():
     assert classify_action(AgentAction(kind="teleport")) is ActionTier.UNKNOWN
 

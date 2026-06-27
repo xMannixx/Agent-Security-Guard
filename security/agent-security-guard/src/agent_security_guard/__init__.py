@@ -26,6 +26,14 @@ from .policy import (
     path_is_sensitive,
 )
 from .scanner import classify_content, scan_input
+from .scope import detect_no_write_scope, is_short_confirmation
+from .self_improvement import (
+    PatchResult,
+    PendingPatch,
+    build_patch_action,
+    confirm,
+    propose,
+)
 from .types import (
     ActionTier,
     AgentAction,
@@ -46,7 +54,7 @@ from .types import (
 )
 from .wrapper import wrap_untrusted
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "__version__",
@@ -74,6 +82,15 @@ __all__ = [
     # bridge + adapter
     "advise_memory_write",
     "GuardAdapter",
+    # user-scope helpers
+    "detect_no_write_scope",
+    "is_short_confirmation",
+    # self-improvement reference gate
+    "propose",
+    "confirm",
+    "build_patch_action",
+    "PendingPatch",
+    "PatchResult",
     # enums
     "Decision",
     "ReasonCode",

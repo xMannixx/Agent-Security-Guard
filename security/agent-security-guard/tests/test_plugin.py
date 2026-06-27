@@ -138,6 +138,33 @@ def test_pre_tool_call_fails_closed_on_exception(monkeypatch):
     assert result["block"] is True
 
 
+def test_pre_tool_call_self_improvement_no_write_scope_denied():
+    ctx = DummyCtx()
+    guard_plugin.register(ctx)
+    result = ctx.hooks["pre_tool_call"](
+        action={"kind": "self_improvement_patch", "target": "communication-style/SKILL.md"},
+        origin_trust="trusted_user",
+        no_write_scope=True,
+    )
+    assert result["decision"] == "deny"
+    assert result["reason_code"] == "EXPLICIT_NO_WRITE_SCOPE_VIOLATION"
+    assert result["block"] is True
+    assert result["allowed"] is False
+
+
+def test_pre_tool_call_self_improvement_agent_initiated_denied():
+    ctx = DummyCtx()
+    guard_plugin.register(ctx)
+    result = ctx.hooks["pre_tool_call"](
+        action={"kind": "skill_patch", "target": "communication-style/SKILL.md"},
+        origin_trust="trusted_user",
+        user_intent_origin="agent_initiated",
+    )
+    assert result["decision"] == "deny"
+    assert result["reason_code"] == "SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER"
+    assert result["block"] is True
+
+
 def test_pre_llm_call_uses_degraded_wrapper_when_unavailable(monkeypatch):
     ctx = DummyCtx()
     guard_plugin.register(ctx)

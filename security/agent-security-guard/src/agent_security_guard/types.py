@@ -90,6 +90,16 @@ class ReasonCode(str, Enum):
     # confirmation provenance
     CONFIRMATION_ORIGIN_UNTRUSTED = "CONFIRMATION_ORIGIN_UNTRUSTED"
 
+    # user scope / ambiguous confirmation
+    EXPLICIT_NO_WRITE_SCOPE_VIOLATION = "EXPLICIT_NO_WRITE_SCOPE_VIOLATION"
+    SHORT_CONFIRMATION_NO_PRIOR_AUTH = "SHORT_CONFIRMATION_NO_PRIOR_AUTH"
+    SHORT_CONFIRMATION_NONAUTHORITATIVE_SOURCE = "SHORT_CONFIRMATION_NONAUTHORITATIVE_SOURCE"
+
+    # self-modification (skill patch / self-improvement / procedural rules)
+    SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER = "SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER"
+    SELF_MODIFICATION_REQUIRES_EXPLICIT_TARGET = "SELF_MODIFICATION_REQUIRES_EXPLICIT_TARGET"
+    SELF_MODIFICATION_REQUIRES_CONFIRMATION = "SELF_MODIFICATION_REQUIRES_CONFIRMATION"
+
     # fallbacks
     UNKNOWN_ACTION_REQUIRES_CONFIRMATION = "UNKNOWN_ACTION_REQUIRES_CONFIRMATION"
     GUARD_UNAVAILABLE = "GUARD_UNAVAILABLE"
@@ -106,6 +116,7 @@ class ActionTier(str, Enum):
     DOWNLOAD = "download"
     INSTALL = "install"
     CONFIG_CHANGE = "config_change"
+    SELF_MODIFICATION = "self_modification"
     SECRET_HANDLING = "secret_handling"
     UNKNOWN = "unknown"
 
@@ -294,6 +305,12 @@ class GuardContext:
     domain_allowlist: List[str] = field(default_factory=list)
     recent_events: List["GuardEvent"] = field(default_factory=list)
     config: Optional[GuardConfig] = None
+    # User-scope governance. All default to the safe/no-extra-gate value so
+    # existing callers are unaffected; the gates below only ever ADD denials.
+    no_write_scope_active: bool = False
+    short_confirmation: bool = False
+    previous_action_was_explicitly_authorized: bool = False
+    requested_action_from_nonuser_context: bool = False
 
 
 @dataclass

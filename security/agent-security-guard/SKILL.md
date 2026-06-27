@@ -1,7 +1,7 @@
 ---
 name: agent-security-guard
 description: "Runtime interaction guard for Hermes/OpenClaw: a deterministic transition policy engine that keeps reading, browsing, and summarizing free while stripping command-authority from untrusted content. Separates origin trust from data sensitivity, classifies actions into tiers, blocks dangerous kill-chains (read secret -> external post, web -> shell, download -> execute, untrusted -> privileged memory), wraps untrusted content as data (not instructions), and emits machine-readable decisions with audit. Default mode: autonomous-safe."
-version: 0.1.0
+version: 0.2.0
 author: xMannixx
 license: MIT
 platforms: [linux, macos, windows]
@@ -44,11 +44,14 @@ knowledge).
 
 ## Status
 
-v0.1.0 complete: types/enums, action classifier, deterministic policy core,
-content scanner + boundary wrapper, sequence kill-chain detection, SQLite/JSONL
-audit, advice-only memory bridge, CLI, and the Hermes/OpenClaw plugin —
-hardened by a Bugbot + security-review pass (fail-closed hooks, exfil-chain
-sensitivity inference, unambiguous enforcement flags, laundered-confirmation
-denial, full boundary neutralization). 152 tests pass, including regression
-coverage of the OpenClaw threat classes. See `README.md`, `ROADMAP.md`, and
-`references/` for design and threat model.
+v0.2.0: adds self-modification governance on top of v0.1.0. Skill patch /
+self-improvement / procedural-rule changes are a dedicated
+`SELF_MODIFICATION` tier that is never a direct allow; explicit no-write scopes
+and ambiguous "yes" confirmations are denied before any per-tier rule; and real
+writes require an explicit, hash-bound two-phase confirmation (see
+`references/self-modification.md`). v0.1.0 delivered the deterministic policy
+core, scanner + boundary wrapper, sequence kill-chain detection, SQLite/JSONL
+audit, advice-only memory bridge, CLI, and the Hermes/OpenClaw plugin, hardened
+by a Bugbot + security-review pass. 180 tests pass, including the
+self-improvement end-to-end bar and the OpenClaw threat-class regressions. See
+`README.md`, `ROADMAP.md`, and `references/` for design and threat model.
