@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="agent-security-guard logo" width="180">
+</p>
+
 <h1 align="center">agent-security-guard</h1>
 
 <p align="center"><strong>A deterministic transition policy engine for Hermes / OpenClaw agents.</strong><br>Keeps reading, browsing, and summarizing free — strips command-authority from untrusted content.</p>
@@ -7,7 +11,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.8%2B-blue.svg" alt="Python 3.8+"></a>
   <img src="https://img.shields.io/badge/deps-stdlib%20only-success.svg" alt="Dependencies: stdlib only">
-  <img src="https://img.shields.io/badge/tests-152%20passing-success.svg" alt="Tests: 152 passing">
+  <img src="https://img.shields.io/badge/tests-180%20passing-success.svg" alt="Tests: 180 passing">
 </p>
 
 The companion to [`agent-memory`](../Agent%20memory%20skill). The memory skill
