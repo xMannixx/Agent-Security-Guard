@@ -1,10 +1,14 @@
 """Conservative text heuristics for user-scope signals (DE + EN).
 
-These are an OFFER for a host/plugin to populate ``GuardContext`` flags from a
-raw user message when it does not set them explicitly. The ``GuardContext``
-flags remain the source of truth; these helpers only ever *suggest* turning a
-gate ON (fail-safe direction). They are intentionally conservative: they match
-clear, explicit phrases and avoid firing on ordinary prose.
+These are an OFFER for a host that cannot set the ``GuardContext`` scope flags
+itself. They are **opt-in** (``scope_from_text``) and never on by default:
+guessing scope from wording turned everyday phrasing into hard denials, because
+a bare "ok" reads as an ambiguous confirmation and "nur lesen" reads as a
+no-write scope, and both then blocked every state-changing action in the turn.
+
+The ``GuardContext`` flags remain the source of truth. These helpers only ever
+*suggest* turning a gate ON (fail-safe direction), match explicit phrases at a
+clause boundary, and avoid firing inside ordinary prose.
 
 stdlib-only.
 """
@@ -84,7 +88,15 @@ def _compile_alt(phrases: List[str]) -> Pattern:
     return re.compile("|".join(f"(?:{p})" for p in phrases), re.IGNORECASE)
 
 
-_NO_WRITE_RE = _compile_alt(_NO_WRITE_PHRASES)
+# Clause-anchored: the phrase must start the message or follow a clause break,
+# so it is an instruction ("..., nichts ändern") rather than an incidental
+# substring inside a longer sentence.
+_NO_WRITE_RE = re.compile(
+    r"(?:^|[.,;:!?\n]|\bund\b|\baber\b|\bplease\b)\s*[\"'(]?\s*(?:"
+    + "|".join(f"(?:{p})" for p in _NO_WRITE_PHRASES)
+    + r")",
+    re.IGNORECASE,
+)
 # Anchored: the entire (normalized) message must be one of the confirmations.
 _SHORT_CONFIRMATION_RE = re.compile(
     r"^\W*(?:" + "|".join(f"(?:{p})" for p in _SHORT_CONFIRMATION_PHRASES) + r")\W*$",
@@ -97,7 +109,10 @@ _MAX_SHORT_CONFIRMATION_CHARS = 24
 
 
 def detect_no_write_scope(text: str) -> bool:
-    """True if the user message clearly sets a no-write / suggestion-only scope."""
+    """True if the user message clearly sets a no-write / suggestion-only scope.
+
+    Opt-in helper: only consulted when the host enables ``scope_from_text``.
+    """
     if not text:
         return False
     return _NO_WRITE_RE.search(text) is not None

@@ -204,8 +204,19 @@ def test_memory_observation_to_authorization_allowed():
 # --------------------------------------------------------------------------- #
 
 
-def test_unknown_tier_requires_confirmation():
+def test_unknown_tier_is_audited_not_blocked_by_default():
+    # An unrecognized tool kind is not evidence of danger. Blocking it here made
+    # the guard deny the host's own tools (list_dir, dashboard_query, ...).
     d = decide_action(AgentAction(kind="teleport"), ActionTier.UNKNOWN, ctx())
+    assert d.decision is Decision.ALLOW_WITH_WARNING
+    assert d.reason_code is ReasonCode.UNKNOWN_ACTION_AUDITED
+    assert d.audit_required is True
+
+
+def test_unknown_tier_requires_confirmation_in_strict_mode():
+    d = decide_action(
+        AgentAction(kind="teleport"), ActionTier.UNKNOWN, ctx(mode="strict")
+    )
     assert d.decision is Decision.REQUIRE_CONFIRMATION
     assert d.reason_code is ReasonCode.UNKNOWN_ACTION_REQUIRES_CONFIRMATION
 
@@ -221,11 +232,28 @@ def test_unknown_tier_requires_confirmation():
     "/a/b/id_rsa",
     "/x/.ssh/known_hosts",
     "deploy.pem",
-    "app.log",
+    "credentials.yaml",
+    "/home/u/.aws/config",
 ])
 def test_path_is_sensitive_true(path):
     cfg = load_config()
     assert path_is_sensitive(path, cfg.sensitive_paths) is True
+
+
+@pytest.mark.parametrize("path", [
+    "app.log",
+    "logs/today.log",
+    "memory.db",
+    "agent-memory.sqlite",
+    "settings.json",
+    "config.py",
+    "docker-compose.yml",
+])
+def test_ordinary_developer_files_are_not_sensitive(path):
+    # These globs used to be shipped as "sensitive", which marked normal project
+    # files secret-bearing and then denied every later external write.
+    cfg = load_config()
+    assert path_is_sensitive(path, cfg.sensitive_paths) is False
 
 
 @pytest.mark.parametrize("path", [

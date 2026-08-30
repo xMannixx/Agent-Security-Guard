@@ -102,7 +102,13 @@ class ReasonCode(str, Enum):
 
     # fallbacks
     UNKNOWN_ACTION_REQUIRES_CONFIRMATION = "UNKNOWN_ACTION_REQUIRES_CONFIRMATION"
+    UNKNOWN_ACTION_AUDITED = "UNKNOWN_ACTION_AUDITED"
     GUARD_UNAVAILABLE = "GUARD_UNAVAILABLE"
+
+    # availability: the guard must never brick the host silently
+    MONITOR_MODE_ADVISORY = "MONITOR_MODE_ADVISORY"
+    GUARD_DEGRADED_ALLOWED = "GUARD_DEGRADED_ALLOWED"
+    GUARD_DEGRADED_DANGEROUS_KIND = "GUARD_DEGRADED_DANGEROUS_KIND"
 
 
 class ActionTier(str, Enum):
@@ -128,11 +134,21 @@ class OriginTrust(str, Enum):
     ``local_project``; generic/unknown ``tool_output`` is treated as untrusted
     for action decisions (fail safe). Web/document tool payloads should be
     classified as ``external_web`` / ``external_document`` by their source kind.
+
+    ``UNSPECIFIED`` vs ``UNKNOWN`` is a deliberate distinction:
+
+    - ``UNSPECIFIED`` means *the host did not state a provenance*. That is the
+      normal case for a host's own internal tool calls, so it is NOT treated as
+      untrusted — otherwise the guard denies the host's own operation.
+    - ``UNKNOWN`` means *the provenance was examined and could not be
+      established*. That IS untrusted (fail safe), e.g. content from an
+      unrecognized external source.
     """
 
     TRUSTED_USER = "trusted_user"
     LOCAL_PROJECT = "local_project"
     TRUSTED_TOOL_OUTPUT = "trusted_tool_output"
+    UNSPECIFIED = "unspecified"
     TOOL_OUTPUT = "tool_output"
     EXTERNAL_WEB = "external_web"
     EXTERNAL_DOCUMENT = "external_document"
@@ -156,6 +172,7 @@ _ORIGIN_TRUST_RANK: Dict[OriginTrust, int] = {
     OriginTrust.TRUSTED_USER: 5,
     OriginTrust.LOCAL_PROJECT: 4,
     OriginTrust.TRUSTED_TOOL_OUTPUT: 4,
+    OriginTrust.UNSPECIFIED: 3,
     OriginTrust.TOOL_OUTPUT: 2,
     OriginTrust.EXTERNAL_WEB: 1,
     OriginTrust.EXTERNAL_DOCUMENT: 1,
@@ -167,6 +184,7 @@ _TRUSTED_ORIGINS = frozenset(
         OriginTrust.TRUSTED_USER,
         OriginTrust.LOCAL_PROJECT,
         OriginTrust.TRUSTED_TOOL_OUTPUT,
+        OriginTrust.UNSPECIFIED,
     }
 )
 
@@ -226,6 +244,8 @@ class GuardConfig:
     secret_patterns: List[str] = field(default_factory=list)
     audit: Dict[str, Any] = field(default_factory=dict)
     limits: Dict[str, Any] = field(default_factory=dict)
+    on_error: str = "degrade"
+    scope_from_text: bool = False
 
 
 @dataclass
@@ -424,6 +444,16 @@ class GuardDecision:
     transformed_action: Optional[AgentAction] = None
     audit_required: bool = True
     risk_score: float = 0.0
+    # Set when a mode downgraded the decision (monitor mode). ``decision`` is
+    # then what the host should enforce; ``advisory_decision`` is what a
+    # blocking mode WOULD have done, so operators can tune before enforcing.
+    advisory_decision: Optional[Decision] = None
+    advisory_reason_code: Optional[ReasonCode] = None
+
+    @property
+    def enforced(self) -> bool:
+        """False when the real decision was downgraded for reporting only."""
+        return self.advisory_decision is None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -437,6 +467,13 @@ class GuardDecision:
             ),
             "audit_required": self.audit_required,
             "risk_score": self.risk_score,
+            "enforced": self.enforced,
+            "advisory_decision": (
+                self.advisory_decision.value if self.advisory_decision else None
+            ),
+            "advisory_reason_code": (
+                self.advisory_reason_code.value if self.advisory_reason_code else None
+            ),
         }
 
 

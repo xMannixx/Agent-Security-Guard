@@ -1,45 +1,76 @@
-# agent-security-guard default policy
-# Mode: autonomous-safe -> reading/browsing/summarizing stay free;
-# only risky transitions (exec, install, external write, secret handling,
-# privileged memory) are gated. Hard rules win over the risk score.
+# agent-security-guard policy
+#
+# Every setting here is actually read by the policy engine. (Before 0.3.0
+# `mode` and `tiers` were decorative, so an over-blocking guard could not be
+# loosened without uninstalling it.)
+
+# monitor         -> never blocks. Logs what it WOULD have blocked
+#                    (decision=allow_with_warning, advisory_decision=...).
+#                    Use this first in a live host, and as the panic switch.
+# autonomous-safe -> DEFAULT. Blocks only the narrow, unambiguous danger set:
+#                    untrusted -> shell/install, secret exfiltration,
+#                    unauthorized self-modification, privileged memory
+#                    injection. Unrecognized tool kinds are allowed + audited.
+# strict          -> also stops and asks on unrecognized tool kinds.
+#
+# The env var AGENT_SECURITY_GUARD_MODE overrides this without editing files,
+# e.g. AGENT_SECURITY_GUARD_MODE=monitor to stop all blocking immediately.
 mode: autonomous-safe
 
-# Domains the agent may write to / install from with only a confirmation
-# (instead of an outright deny). Empty by default = nothing pre-trusted.
+# What to do when the guard itself cannot run (import error, bad config).
+#   degrade  -> DEFAULT. Block only kinds that are dangerous by name; let
+#               ordinary host operations through, flagged as degraded.
+#   deny_all -> Block everything. Safest, but a broken install takes the
+#               host down completely.
+on_error: degrade
+
+# Infer "no-write scope" / "ambiguous confirmation" from raw user wording.
+# Off by default: an everyday "ok" or "nur lesen" otherwise denied every
+# state-changing action in that turn. Prefer passing the flags explicitly.
+scope_from_text: false
+
+# Domains the agent may write to without a per-call confirmation.
 domain_allowlist: []
 
-# Per-tier default decisions. Hard rules in policy.py can override these
-# (a hard deny is never softened by a tier default).
+# Per-tier decisions. These tune the operator-facing paths. The
+# untrusted-origin denials (untrusted -> shell/install/config, secret exfil,
+# privileged memory) are deliberately NOT tunable here: softening them would
+# remove the guarantee the guard exists for.
 tiers:
   read_only: allow
   local_read: allow
   external_write: require_confirmation
   shell_from_user: require_confirmation
-  shell_from_untrusted: deny
   install_from_user: require_confirmation
-  install_from_untrusted: deny
   config_change: require_confirmation
+  download_inspect: allow
+  # An unrecognized tool kind is not evidence of danger. Blocking it is what
+  # took hosts down in 0.2.x. Raise to require_confirmation only if your host
+  # can actually surface a prompt for every unknown tool.
+  unknown_action: allow_with_warning
+  # Non-tunable, listed for transparency:
+  shell_from_untrusted: deny
+  install_from_untrusted: deny
   memory_external_to_evidence: allow_with_warning
   memory_external_to_identity: require_confirmation
   memory_external_to_authorization: deny
   memory_external_to_procedural: deny
-  download_inspect: allow
   download_then_execute_untrusted: deny
   download_then_execute_user: require_confirmation
 
-# Glob-style sensitive paths. A match raises DataSensitivity; reads are still
-# allowed (LOCAL_READ) but flow into secret-aware sequence/exfil rules.
+# Real secret material only. Anything listed here raises DataSensitivity, and a
+# sensitive read then gates later external writes via the exfiltration chain.
+# Do NOT add broad developer-file globs (*.db, *.log, settings.json, config.py):
+# in 0.2.x they marked ordinary project files as sensitive, which denied every
+# subsequent external write for the rest of the session.
 sensitive_paths:
   - ".env"
   - ".env.*"
   - "*.pem"
   - "*.key"
-  - "*.crt"
   - "*.p12"
   - "*.pfx"
   - "*.kdbx"
-  - "*.sqlite"
-  - "*.db"
   - "id_rsa"
   - "id_rsa.*"
   - ".ssh/"
@@ -53,25 +84,21 @@ sensitive_paths:
   - ".git-credentials"
   - "secrets.*"
   - "credentials.*"
-  - "token.*"
-  - "auth.*"
-  - "*.log"
-  - "logs/"
-  - "backups/"
-  - "docker-compose.yml"
-  - "settings.json"
-  - "config.py"
 
-# Regex patterns that mark content as secret-sensitive even inside an
-# otherwise-harmless file. Used by the content scanner (Sprint 2).
+# Patterns that mark content as secret-bearing. These match credential
+# *values*, not the mere mention of a credential word: a bare `(?i)api[_-]?key`
+# classified any document discussing API keys as SECRET.
 secret_patterns:
-  - "(?i)api[_-]?key"
-  - "(?i)secret[_-]?key"
-  - "(?i)access[_-]?token"
-  - "(?i)bearer\\s+[A-Za-z0-9._-]{12,}"
+  - "(?i)api[_-]?key\\s*[:=]\\s*[\"']?[A-Za-z0-9._\\-]{16,}"
+  - "(?i)secret[_-]?key\\s*[:=]\\s*[\"']?[A-Za-z0-9._\\-]{16,}"
+  - "(?i)access[_-]?token\\s*[:=]\\s*[\"']?[A-Za-z0-9._\\-]{16,}"
+  - "(?i)password\\s*[:=]\\s*[\"']?[^\\s\"']{8,}"
+  - "(?i)bearer\\s+[A-Za-z0-9._-]{20,}"
   - "AKIA[0-9A-Z]{16}"
+  - "gh[pousr]_[A-Za-z0-9]{30,}"
+  - "sk-[A-Za-z0-9]{20,}"
+  - "xox[baprs]-[A-Za-z0-9-]{10,}"
   - "-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----"
-  - "(?i)password\\s*[:=]"
 
 audit:
   backend: sqlite
@@ -81,3 +108,7 @@ audit:
 limits:
   max_content_chars: 20000
   max_history_events: 50
+  # How many recent actions count as "the current chain" when the host passes
+  # no chain_id. Without this window the whole session was one chain, so a
+  # single sensitive read denied every later external write indefinitely.
+  chain_window: 12

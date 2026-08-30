@@ -20,9 +20,10 @@ from .action_guard import check_action
 from .actions import classify_action
 from .audit import AuditLog, build_event
 from .memory_bridge import advise_memory_write
+from .modes import apply_mode, effective_mode
 from .policy import load_config, path_is_sensitive
 from .scanner import classify_content, scan_input
-from .sequence_guard import ActionHistory, check_sequence
+from .sequence_guard import DEFAULT_CHAIN_WINDOW, ActionHistory, check_sequence
 from .types import (
     AgentAction,
     DataSensitivity,
@@ -48,8 +49,20 @@ class GuardAdapter:
     ):
         self.config = config or load_config()
         max_events = int(self.config.limits.get("max_history_events", 50))
-        self.history = history if history is not None else ActionHistory(max_events)
+        chain_window = int(
+            self.config.limits.get("chain_window", DEFAULT_CHAIN_WINDOW)
+        )
+        self.history = (
+            history
+            if history is not None
+            else ActionHistory(max_events, chain_window=chain_window)
+        )
         self.audit = audit
+
+    @property
+    def mode(self) -> str:
+        """The mode actually in force (env override wins over config)."""
+        return effective_mode(self.config.mode)
 
     def guard_input(
         self,
@@ -80,11 +93,12 @@ class GuardAdapter:
         ``"self_improvement"`` for skill-patch gating) without changing the
         decision logic.
         """
+        context = self._apply_session_policy(context)
         context = self._enrich_sensitivity(action, context)
         tier = classify_action(action)
         action_decision = check_action(action, context)
         sequence_decision = check_sequence(action, self.history, context)
-        final = _stricter(action_decision, sequence_decision)
+        final = apply_mode(_stricter(action_decision, sequence_decision), self.mode)
 
         self.history.record_action(action, context, final.decision)
 
@@ -93,6 +107,17 @@ class GuardAdapter:
                 build_event(event_type, final, action=action, tier=tier, context=context)
             )
         return final
+
+    def _apply_session_policy(self, context: GuardContext) -> GuardContext:
+        """Make the adapter's config authoritative for a caller that omitted it.
+
+        Without this, a host configuring ``mode: monitor`` still got strict
+        decisions whenever it passed a plain ``GuardContext`` (whose ``mode``
+        field carries the dataclass default, not the operator's setting).
+        """
+        if context.config is not None:
+            return context
+        return dataclasses.replace(context, config=self.config, mode=self.mode)
 
     def _enrich_sensitivity(
         self, action: AgentAction, context: GuardContext

@@ -78,11 +78,18 @@ _TIER_CATEGORY = {
 }
 
 
+#: How many recent actions count as "the current chain" when the host supplies
+#: no ``chain_id``. Without a window, the full history counted as one chain, so a
+#: single sensitive read denied every external write for the rest of the session.
+DEFAULT_CHAIN_WINDOW = 12
+
+
 class ActionHistory:
     """A bounded, categorized log of recent actions for chain detection."""
 
-    def __init__(self, max_events: int = 50):
+    def __init__(self, max_events: int = 50, chain_window: int = DEFAULT_CHAIN_WINDOW):
         self._entries: Deque[HistoryEntry] = deque(maxlen=max(1, max_events))
+        self.chain_window = max(1, chain_window)
 
     def record(self, entry: HistoryEntry) -> None:
         self._entries.append(entry)
@@ -110,9 +117,16 @@ class ActionHistory:
         return list(self._entries)
 
     def relevant(self, chain_id: Optional[str]) -> List[HistoryEntry]:
-        """Entries in the active chain (all entries if no chain_id is set)."""
+        """Entries belonging to the active chain.
+
+        With an explicit ``chain_id`` the host defines the chain boundary, so all
+        matching entries count. Without one, only the last ``chain_window``
+        entries count: treating an unbounded session as a single chain meant one
+        sensitive read blocked every later external write indefinitely.
+        """
         if chain_id is None:
-            return list(self._entries)
+            entries = list(self._entries)
+            return entries[-self.chain_window:]
         return [e for e in self._entries if e.chain_id == chain_id]
 
     def __len__(self) -> int:

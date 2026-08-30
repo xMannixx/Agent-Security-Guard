@@ -65,8 +65,8 @@
       "expect": ["secret"]
     },
     {
-      "name": "api_key_label",
-      "content": "api_key = 12345-abcde, do not share.",
+      "name": "api_key_with_value",
+      "content": "api_key = A1b2C3d4E5f6G7h8J9k0, do not share.",
       "expect": ["secret"]
     },
     {
@@ -84,6 +84,11 @@
     {
       "name": "neutral_question",
       "content": "Compare the performance of quicksort and mergesort for nearly-sorted input.",
+      "expect": []
+    },
+    {
+      "name": "credential_words_without_values",
+      "content": "Set your api_key in the dashboard, then rotate the access_token monthly. The password field is required.",
       "expect": []
     }
   ]

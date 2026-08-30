@@ -104,7 +104,7 @@ def test_require_confirmation_sets_block_and_flags():
     assert result["requires_confirmation"] is True
 
 
-def test_pre_tool_call_fails_closed_when_guard_unavailable(monkeypatch):
+def test_unavailable_guard_still_blocks_dangerous_kinds(monkeypatch):
     ctx = DummyCtx()
     guard_plugin.register(ctx)
     monkeypatch.setattr(guard_plugin, "_get_adapter", lambda: None)
@@ -113,12 +113,49 @@ def test_pre_tool_call_fails_closed_when_guard_unavailable(monkeypatch):
         origin_trust="trusted_user",
     )
     assert result["decision"] == "deny"
-    assert result["reason_code"] == "GUARD_UNAVAILABLE"
+    assert result["reason_code"] == "GUARD_DEGRADED_DANGEROUS_KIND"
     assert result["block"] is True
     assert result["allowed"] is False
+    assert result["degraded"] is True
 
 
-def test_pre_tool_call_fails_closed_on_exception(monkeypatch):
+def test_unavailable_guard_does_not_brick_ordinary_tools(monkeypatch):
+    # A broken guard install must not take the host down: reads/listings keep
+    # working, loudly flagged, instead of every call coming back as deny.
+    ctx = DummyCtx()
+    guard_plugin.register(ctx)
+    monkeypatch.setattr(guard_plugin, "_get_adapter", lambda: None)
+    for kind in ("http_get", "read_file", "list_dir", "dashboard_query"):
+        result = ctx.hooks["pre_tool_call"](action={"kind": kind, "target": "x"})
+        assert result["allowed"] is True, kind
+        assert result["block"] is False, kind
+        assert result["reason_code"] == "GUARD_DEGRADED_ALLOWED", kind
+        assert result["degraded"] is True, kind
+
+
+def test_on_error_deny_all_restores_hard_fail_closed(monkeypatch):
+    ctx = DummyCtx()
+    guard_plugin.register(ctx)
+    monkeypatch.setattr(guard_plugin, "_get_adapter", lambda: None)
+    monkeypatch.setattr(guard_plugin, "_config_path", lambda: None)
+    result = guard_plugin._degraded_payload(
+        guard_plugin.AgentAction(kind="http_get", target="x"),
+        "unavailable",
+        config=_config_with(on_error="deny_all"),
+    )
+    assert result["decision"] == "deny"
+    assert result["reason_code"] == "GUARD_UNAVAILABLE"
+    assert result["block"] is True
+
+
+def _config_with(**overrides):
+    config = guard_plugin.load_config(None)
+    for key, value in overrides.items():
+        setattr(config, key, value)
+    return config
+
+
+def test_degrades_on_exception(monkeypatch):
     ctx = DummyCtx()
     guard_plugin.register(ctx)
 
@@ -133,9 +170,16 @@ def test_pre_tool_call_fails_closed_on_exception(monkeypatch):
         action={"kind": "http_get", "target": "https://x"},
         origin_trust="trusted_user",
     )
-    assert result["decision"] == "deny"
-    assert result["reason_code"] == "GUARD_UNAVAILABLE"
-    assert result["block"] is True
+    assert result["allowed"] is True
+    assert result["reason_code"] == "GUARD_DEGRADED_ALLOWED"
+    assert result["degraded"] is True
+
+    dangerous = ctx.hooks["pre_tool_call"](
+        action={"kind": "pip_install", "target": "evil"},
+        origin_trust="trusted_user",
+    )
+    assert dangerous["block"] is True
+    assert dangerous["reason_code"] == "GUARD_DEGRADED_DANGEROUS_KIND"
 
 
 def test_pre_tool_call_self_improvement_no_write_scope_denied():

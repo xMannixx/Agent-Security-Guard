@@ -17,6 +17,7 @@ import os
 from typing import Any, Dict, List, Optional
 
 from . import _miniyaml
+from .modes import MODE_STRICT, effective_mode
 from .types import (
     ActionTier,
     AgentAction,
@@ -54,32 +55,57 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "download_inspect": "allow",
         "download_then_execute_untrusted": "deny",
         "download_then_execute_user": "require_confirmation",
+        # What to do with an action kind the guard does not recognize. Blocking
+        # here is what took hosts down in 0.2.x: an unknown *tool name* is not
+        # evidence of danger. Only `strict` mode stops and asks.
+        "unknown_action": "allow_with_warning",
     },
+    # Only true secret material. Broad developer-file globs (*.db, *.log,
+    # settings.json, config.py, ...) used to land here, which marked ordinary
+    # project files as sensitive and then blocked every later external write
+    # via the exfiltration chain. Add project-specific paths deliberately.
     "sensitive_paths": [
-        ".env", ".env.*", "*.pem", "*.key", "*.crt", "*.p12", "*.pfx",
-        "*.kdbx", "*.sqlite", "*.db", "id_rsa", "id_rsa.*", ".ssh/", ".aws/",
+        ".env", ".env.*", "*.pem", "*.key", "*.p12", "*.pfx",
+        "*.kdbx", "id_rsa", "id_rsa.*", ".ssh/", ".aws/",
         ".gcp/", ".azure/", ".kube/", ".npmrc", ".pypirc", ".netrc",
-        ".git-credentials", "secrets.*", "credentials.*", "token.*", "auth.*",
-        "*.log", "logs/", "backups/", "docker-compose.yml", "settings.json",
-        "config.py",
+        ".git-credentials", "secrets.*", "credentials.*",
     ],
+    # Match credential *values*, not the mere mention of a credential word.
+    # `(?i)api[_-]?key` alone classified any doc or config that talks about API
+    # keys as SECRET, which then denied external writes.
     "secret_patterns": [
-        r"(?i)api[_-]?key",
-        r"(?i)secret[_-]?key",
-        r"(?i)access[_-]?token",
-        r"(?i)bearer\s+[A-Za-z0-9._-]{12,}",
+        r"(?i)api[_-]?key\s*[:=]\s*[\"']?[A-Za-z0-9._\-]{16,}",
+        r"(?i)secret[_-]?key\s*[:=]\s*[\"']?[A-Za-z0-9._\-]{16,}",
+        r"(?i)access[_-]?token\s*[:=]\s*[\"']?[A-Za-z0-9._\-]{16,}",
+        r"(?i)password\s*[:=]\s*[\"']?[^\s\"']{8,}",
+        r"(?i)bearer\s+[A-Za-z0-9._-]{20,}",
         r"AKIA[0-9A-Z]{16}",
+        r"gh[pousr]_[A-Za-z0-9]{30,}",
+        r"sk-[A-Za-z0-9]{20,}",
+        r"xox[baprs]-[A-Za-z0-9-]{10,}",
         r"-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----",
-        r"(?i)password\s*[:=]",
     ],
     "audit": {
         "backend": "sqlite",
         "path": "guard-audit.db",
         "jsonl_path": "guard-audit.jsonl",
     },
+    # What to do when the guard itself cannot evaluate an action (import
+    # failure, broken config, unwritable audit sink).
+    #   degrade  -> block only kinds that are dangerous by name, allow the rest
+    #   deny_all -> block everything (0.2.x behaviour; bricks the host)
+    "on_error": "degrade",
+    # Opt-in: derive no-write-scope / short-confirmation from raw user text.
+    # Off by default because natural phrasing ("ok", "nur lesen") otherwise
+    # denied every state-changing action.
+    "scope_from_text": False,
     "limits": {
         "max_content_chars": 20000,
         "max_history_events": 50,
+        # How many recent actions count as "the current chain" when the host
+        # supplies no chain_id. Without this, one sensitive read poisoned every
+        # external write for the rest of the session.
+        "chain_window": 12,
     },
 }
 
@@ -109,6 +135,8 @@ def load_config(path: Optional[str] = None) -> GuardConfig:
         secret_patterns=list(merged.get("secret_patterns", [])),
         audit=dict(merged.get("audit", {})),
         limits=dict(merged.get("limits", {})),
+        on_error=str(merged.get("on_error", "degrade")),
+        scope_from_text=bool(merged.get("scope_from_text", False)),
     )
 
 
@@ -121,6 +149,8 @@ def _deep_copy_defaults() -> Dict[str, Any]:
         "secret_patterns": list(DEFAULT_CONFIG["secret_patterns"]),
         "audit": dict(DEFAULT_CONFIG["audit"]),
         "limits": dict(DEFAULT_CONFIG["limits"]),
+        "on_error": DEFAULT_CONFIG["on_error"],
+        "scope_from_text": DEFAULT_CONFIG["scope_from_text"],
     }
 
 
@@ -165,6 +195,17 @@ def domain_allowed(target: str, allowlist: List[str]) -> bool:
     return False
 
 
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]", "0.0.0.0"})
+
+
+def is_loopback_target(target: str) -> bool:
+    """True if the target addresses this machine (never leaves the host)."""
+    host = _extract_host(target)
+    if not host:
+        return False
+    return host in _LOOPBACK_HOSTS or host.startswith("127.")
+
+
 def _extract_host(target: str) -> str:
     if not target:
         return ""
@@ -175,12 +216,47 @@ def _extract_host(target: str) -> str:
             break
     value = value.split("/", 1)[0]
     value = value.split("@")[-1]
-    value = value.split(":", 1)[0]
-    return value
+    # Bracketed IPv6 ("[::1]:9000") must not be split on its own colons.
+    if value.startswith("["):
+        closing = value.find("]")
+        if closing != -1:
+            return value[: closing + 1]
+    return value.split(":", 1)[0]
 
 
 def _untrusted(context: GuardContext) -> bool:
     return context.origin_trust.is_untrusted
+
+
+def resolve_mode(context: GuardContext) -> str:
+    """The mode in force for this evaluation (env override > config > context)."""
+    configured = context.mode or (context.config.mode if context.config else None)
+    return effective_mode(configured)
+
+
+_DECISION_BY_NAME = {
+    "allow": Decision.ALLOW,
+    "allow_with_warning": Decision.ALLOW_WITH_WARNING,
+    "transform": Decision.TRANSFORM,
+    "require_confirmation": Decision.REQUIRE_CONFIRMATION,
+    "deny": Decision.DENY,
+}
+
+
+def tier_setting(
+    context: GuardContext, key: str, default: Decision
+) -> Decision:
+    """Resolve a tunable per-tier decision from ``guard.yaml``.
+
+    Only the operator-tunable paths consult this (external write, shell/install
+    from a trusted origin, config change, reads, unknown actions). The
+    untrusted-origin denials are deliberately NOT tunable: softening those would
+    remove the guarantee the guard exists for.
+    """
+    tiers = context.config.tiers if context.config else None
+    if not tiers:
+        tiers = DEFAULT_CONFIG["tiers"]
+    return _DECISION_BY_NAME.get(str(tiers.get(key, "")).strip().lower(), default)
 
 
 def _suggested_by_untrusted(context: GuardContext) -> bool:
@@ -240,7 +316,11 @@ def decide_action(
             return scope_decision
 
     if tier is ActionTier.READ_ONLY:
-        return _allow(ReasonCode.ALLOW_READ_ONLY, "Read-only action; allowed.")
+        return _tuned(
+            tier_setting(context, "read_only", Decision.ALLOW),
+            ReasonCode.ALLOW_READ_ONLY,
+            "Read-only action; allowed.",
+        )
 
     if tier is ActionTier.LOCAL_READ:
         return _decide_local_read(context)
@@ -259,7 +339,7 @@ def decide_action(
         return _decide_install(context)
 
     if tier is ActionTier.EXTERNAL_WRITE:
-        return _decide_external_write(context)
+        return _decide_external_write(action, context)
 
     if tier is ActionTier.MEMORY_WRITE:
         return _decide_memory_write(action, context)
@@ -276,11 +356,31 @@ def decide_action(
             "Handling/sending secret material externally is denied.",
         )
 
-    # ActionTier.UNKNOWN and any unmapped tier -> fail safe.
-    return _decide(
-        Decision.REQUIRE_CONFIRMATION,
-        ReasonCode.UNKNOWN_ACTION_REQUIRES_CONFIRMATION,
-        "Unclassified action; requires explicit human confirmation.",
+    return _decide_unknown_action(context)
+
+
+def _decide_unknown_action(context: GuardContext) -> GuardDecision:
+    """An action kind the guard does not recognize.
+
+    Blocking here is what made 0.2.x unusable: a host forwards its own tool
+    names (``list_dir``, ``dashboard_query``, ...), none of which are in the
+    kind table, so every one of them came back as ``require_confirmation`` and
+    the host treated that as blocked. An unrecognized *name* is not evidence of
+    danger — the dangerous transitions are recognized by tier, not by name.
+
+    So the default is to allow and audit, and only ``strict`` mode stops to ask.
+    """
+    if resolve_mode(context) == MODE_STRICT:
+        return _decide(
+            Decision.REQUIRE_CONFIRMATION,
+            ReasonCode.UNKNOWN_ACTION_REQUIRES_CONFIRMATION,
+            "Unclassified action; strict mode requires explicit confirmation.",
+        )
+    return _tuned(
+        tier_setting(context, "unknown_action", Decision.ALLOW_WITH_WARNING),
+        ReasonCode.UNKNOWN_ACTION_AUDITED,
+        "Unclassified action kind; allowed and audited (not a recognized "
+        "high-risk transition).",
     )
 
 
@@ -367,7 +467,11 @@ def _decide_local_read(context: GuardContext) -> GuardDecision:
             ReasonCode.SENSITIVE_PATH_READ,
             "Reading sensitive content; allowed and audited.",
         )
-    return _allow(ReasonCode.ALLOW_LOCAL_READ, "Local read of non-sensitive content.")
+    return _tuned(
+        tier_setting(context, "local_read", Decision.ALLOW),
+        ReasonCode.ALLOW_LOCAL_READ,
+        "Local read of non-sensitive content.",
+    )
 
 
 def _decide_execution(context: GuardContext) -> GuardDecision:
@@ -382,8 +486,8 @@ def _decide_execution(context: GuardContext) -> GuardDecision:
             "Execution originated from untrusted content; a bare confirmation "
             "does not authorize it.",
         )
-    return _decide(
-        Decision.REQUIRE_CONFIRMATION,
+    return _tuned(
+        tier_setting(context, "shell_from_user", Decision.REQUIRE_CONFIRMATION),
         ReasonCode.SHELL_FROM_USER_REQUIRES_CONFIRMATION,
         "Shell/execution from a trusted origin requires confirmation.",
     )
@@ -395,14 +499,16 @@ def _decide_install(context: GuardContext) -> GuardDecision:
             ReasonCode.INSTALL_FROM_UNTRUSTED,
             "Install/update requested from untrusted content is denied.",
         )
-    return _decide(
-        Decision.REQUIRE_CONFIRMATION,
+    return _tuned(
+        tier_setting(context, "install_from_user", Decision.REQUIRE_CONFIRMATION),
         ReasonCode.INSTALL_REQUIRES_CONFIRMATION,
         "Install/update from a trusted origin requires confirmation.",
     )
 
 
-def _decide_external_write(context: GuardContext) -> GuardDecision:
+def _decide_external_write(
+    action: AgentAction, context: GuardContext
+) -> GuardDecision:
     if context.data_sensitivity is DataSensitivity.SECRET:
         return _deny(
             ReasonCode.SECRET_EXTERNAL_SEND,
@@ -413,8 +519,27 @@ def _decide_external_write(context: GuardContext) -> GuardDecision:
             ReasonCode.CONFIRMATION_ORIGIN_UNTRUSTED,
             "External write originated from untrusted content; denied.",
         )
-    return _decide(
-        Decision.REQUIRE_CONFIRMATION,
+    # An explicitly allowlisted domain is pre-approved by the operator, so it
+    # does not need a per-call confirmation.
+    if context.domain_allowlist and domain_allowed(
+        action.target, context.domain_allowlist
+    ):
+        return _allow(
+            ReasonCode.ALLOW_DEFAULT,
+            "External write to an operator-allowlisted domain.",
+        )
+    # A write to loopback does not leave the machine, so it is not the
+    # exfiltration risk this tier exists for. Gating it broke ordinary local
+    # tooling (dashboards, local APIs) on every call. Secret payloads are
+    # already denied above, and the secret-read chain rule still applies.
+    if is_loopback_target(action.target):
+        return _decide(
+            Decision.ALLOW_WITH_WARNING,
+            ReasonCode.ALLOW_DEFAULT,
+            "Write to a local loopback address; allowed and audited.",
+        )
+    return _tuned(
+        tier_setting(context, "external_write", Decision.REQUIRE_CONFIRMATION),
         ReasonCode.EXTERNAL_WRITE_REQUIRES_CONFIRMATION,
         "External write requires confirmation.",
     )
@@ -426,8 +551,8 @@ def _decide_config_change(context: GuardContext) -> GuardDecision:
             ReasonCode.CONFIRMATION_ORIGIN_UNTRUSTED,
             "Config/profile change requested from untrusted content is denied.",
         )
-    return _decide(
-        Decision.REQUIRE_CONFIRMATION,
+    return _tuned(
+        tier_setting(context, "config_change", Decision.REQUIRE_CONFIRMATION),
         ReasonCode.CONFIG_CHANGE_REQUIRES_CONFIRMATION,
         "Config/profile change requires confirmation.",
     )
@@ -482,6 +607,23 @@ def _decide_memory_write(action: AgentAction, context: GuardContext) -> GuardDec
 
 def _decide(decision: Decision, reason: ReasonCode, message: str) -> GuardDecision:
     return GuardDecision(decision=decision, reason_code=reason, message=message)
+
+
+def _tuned(decision: Decision, reason: ReasonCode, message: str) -> GuardDecision:
+    """Build a decision from a tunable setting.
+
+    When an operator relaxes a gate to ``allow``, the gate's own
+    ``*_REQUIRES_CONFIRMATION`` code would misreport the outcome, so a plain
+    allow reports ``ALLOW_DEFAULT`` instead.
+    """
+    if decision is Decision.ALLOW:
+        if reason.value.endswith("_REQUIRES_CONFIRMATION"):
+            return _allow(
+                ReasonCode.ALLOW_DEFAULT,
+                f"{message} (relaxed to allow by policy configuration)",
+            )
+        return _allow(reason, message)
+    return _decide(decision, reason, message)
 
 
 def _allow(reason: ReasonCode, message: str) -> GuardDecision:

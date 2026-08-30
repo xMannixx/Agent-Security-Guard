@@ -58,5 +58,7 @@ def test_untrusted_suggestion_via_context():
 
 
 def test_secret_content_note():
-    a = advise_memory_write("api_key = abc123", "evidence", "observation")
+    a = advise_memory_write(
+        "api_key = A1b2C3d4E5f6G7h8J9k0", "evidence", "observation"
+    )
     assert "secret material" in a.message

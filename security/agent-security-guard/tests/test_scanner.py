@@ -60,8 +60,23 @@ def test_sensitive_path_without_secret_content_is_sensitive():
 
 
 def test_secret_content_in_harmless_path_escalates_to_secret():
-    c = classify_content("api_key = abc123", {"path": "/proj/notes.txt"})
+    c = classify_content(
+        "api_key = A1b2C3d4E5f6G7h8J9k0", {"path": "/proj/notes.txt"}
+    )
     assert c.data_sensitivity is DataSensitivity.SECRET
+
+
+def test_mentioning_credential_words_is_not_secret():
+    # A doc that merely talks about credentials must stay PUBLIC: treating the
+    # word as a secret escalated ordinary content and denied external writes.
+    for text in (
+        "Set your api_key in the dashboard settings.",
+        "Rotate the access_token every 30 days.",
+        "The password field is required to log in.",
+    ):
+        c = classify_content(text, {"path": "/proj/README.md"})
+        assert c.data_sensitivity is DataSensitivity.PUBLIC, text
+        assert not c.secret_indicators, text
 
 
 def test_scan_input_builds_envelope_and_hash():

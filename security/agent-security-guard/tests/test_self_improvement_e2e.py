@@ -85,6 +85,23 @@ def test_bar_no_write_scope_plugin_flags(tmp_path):
     payload = guard_plugin.guard_tool_call(
         action={"kind": "self_improvement_patch", "target": str(skill)},
         origin_trust="trusted_user",
+        user_intent_origin="human_explicit",
+        no_write_scope=True,
+    )
+    assert payload["decision"] == "deny"
+    assert payload["reason_code"] == "EXPLICIT_NO_WRITE_SCOPE_VIOLATION"
+    assert payload["block"] is True
+    assert payload["allowed"] is False
+
+
+def test_bar_no_write_scope_from_text_when_opted_in(tmp_path):
+    # Text inference is opt-in since 0.3.0; with the opt-in it still works.
+    skill, _ = _seed(tmp_path)
+    payload = guard_plugin.guard_tool_call(
+        action={"kind": "self_improvement_patch", "target": str(skill)},
+        origin_trust="trusted_user",
+        user_intent_origin="human_explicit",
+        scope_from_text=True,
         user_message=(
             "Erstelle nur einen Vorschlag. Nichts ändern. "
             "Keine Datei ändern. Keinen Patch anwenden. Nur Vorschlag ausgeben."
@@ -93,7 +110,6 @@ def test_bar_no_write_scope_plugin_flags(tmp_path):
     assert payload["decision"] == "deny"
     assert payload["reason_code"] == "EXPLICIT_NO_WRITE_SCOPE_VIOLATION"
     assert payload["block"] is True
-    assert payload["allowed"] is False
 
 
 def test_bar_short_confirmation_denies_and_skill_md_unchanged(tmp_path):
@@ -112,12 +128,25 @@ def test_bar_short_confirmation_plugin_flags(tmp_path):
     payload = guard_plugin.guard_tool_call(
         action={"kind": "self_improvement_patch", "target": str(skill)},
         origin_trust="trusted_user",
-        user_message="ja, mach das",
+        short_confirmation=True,
     )
     assert payload["decision"] == "deny"
     assert payload["reason_code"] == "SHORT_CONFIRMATION_NO_PRIOR_AUTH"
     assert payload["block"] is True
     assert payload["allowed"] is False
+
+
+def test_bar_short_confirmation_from_text_when_opted_in(tmp_path):
+    skill, _ = _seed(tmp_path)
+    payload = guard_plugin.guard_tool_call(
+        action={"kind": "self_improvement_patch", "target": str(skill)},
+        origin_trust="trusted_user",
+        scope_from_text=True,
+        user_message="ja, mach das",
+    )
+    assert payload["decision"] == "deny"
+    assert payload["reason_code"] == "SHORT_CONFIRMATION_NO_PRIOR_AUTH"
+    assert payload["block"] is True
 
 
 # --------------------------------------------------------------------------- #

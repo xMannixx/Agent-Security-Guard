@@ -4,6 +4,76 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-08-30
+
+**Fixes a critical over-blocking regression.** In a live host, 0.2.x denied
+almost everything — including the host's own operations. No dashboard, no data
+reads, and no way to loosen the policy short of uninstalling the guard. A
+security control that takes the agent down is an outage, not a control.
+
+Every security guarantee from 0.1.0/0.2.0 still holds (`test_threat_regression.py`
+and the self-modification bar are unchanged and green). What changed is the
+default posture on everything that was *not* a recognized attack path.
+
+### Fixed
+
+- **Unrecognized tool kinds are no longer blocked.** The kind table only knows
+  ~40 names, so a host forwarding its own tools (`list_dir`, `dashboard_query`,
+  `sqlite_query`, ...) got `require_confirmation` — which hosts enforce as
+  blocked — for every single call. Unknown kinds are now allowed and audited
+  (`UNKNOWN_ACTION_AUDITED`); only `strict` mode stops to ask.
+- **`mode` and `tiers` in guard.yaml were dead configuration.** The policy
+  hardcoded every decision and never read them, so there was no escape hatch.
+  Both are now enforced, plus the new `on_error`, `scope_from_text`, and
+  `limits.chain_window`.
+- **One ordinary read no longer poisons the session.** `*.db`, `*.sqlite`,
+  `*.log`, `logs/`, `backups/`, `settings.json`, `config.py`,
+  `docker-compose.yml`, `auth.*`, and `token.*` shipped as `sensitive_paths`, so
+  reading a normal project file counted as a secret read and then denied *every*
+  external write for the rest of the session (`SECRET_THEN_EXFIL`). The list is
+  now real secret material only, and an unbounded session is no longer treated
+  as one chain (`chain_window`, default 12).
+- **Credential *mentions* are no longer secrets.** `(?i)api[_-]?key` and
+  `(?i)password\s*[:=]` matched any text discussing credentials. Patterns now
+  require a credential value, and cover `gh*_`, `sk-`, and Slack tokens.
+- **A missing provenance kwarg is no longer "untrusted".** `origin_trust`
+  defaulted to `UNKNOWN`, which is untrusted, so a host that simply did not pass
+  the kwarg had all shell, install, and config actions hard-denied. New
+  `OriginTrust.UNSPECIFIED` (not untrusted) means "the host stated nothing";
+  `UNKNOWN` keeps meaning "examined and unestablished" and stays untrusted.
+- **Everyday wording no longer creates a no-write scope.** Scope inference from
+  raw user text is now opt-in (`scope_from_text`, default off): a bare "ok" was
+  read as an ambiguous confirmation and "nur lesen" as a no-write scope, and both
+  denied every state-changing action in the turn. When enabled, matching is
+  clause-anchored.
+- **The guard's own failure is no longer an outage.** An unreadable config or
+  unwritable audit file made `pre_tool_call` answer `deny` for every call.
+  Audit failure now degrades to running without audit, and an unavailable engine
+  blocks only kinds that are dangerous by name (`GUARD_DEGRADED_DANGEROUS_KIND`)
+  while letting ordinary operations through, flagged `degraded`. Set
+  `on_error: deny_all` for the previous hard fail-closed behaviour.
+- **Loopback writes are not exfiltration.** POSTs to `localhost`/`127.0.0.1`/
+  `[::1]` no longer need a per-call confirmation (secret payloads and the
+  secret-read chain still apply). Also fixes IPv6 host parsing in
+  `_extract_host`, which mangled bracketed addresses.
+- `domain_allowlist` is now actually honoured for external writes.
+
+### Added
+
+- `monitor` mode and `agent_security_guard.modes`: never blocks, and records what
+  a blocking mode *would* have done in `advisory_decision` /
+  `advisory_reason_code` (also exposed as `enforced` in the decision dict). The
+  recommended way to introduce the guard into a live host.
+- `AGENT_SECURITY_GUARD_MODE` env override (accepts `off`/`monitor`/`report`) as
+  a kill switch that needs no file edits.
+- `tests/test_availability.py`: 51 tests that assert the host keeps working —
+  the counterweight to the threat regressions. 246 tests total.
+
+### Changed
+
+- The plugin resolves `guard.yaml` from the cwd, `~/.hermes/`, and the plugin
+  directory instead of a bare relative path.
+
 ## [0.2.0] - 2026-06-28
 
 Self-modification governance: close the unauthorized self-improvement / skill

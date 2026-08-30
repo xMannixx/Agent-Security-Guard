@@ -45,6 +45,7 @@ try:
         OriginTrust,
         UserIntentOrigin,
         detect_no_write_scope,
+        effective_mode,
         is_short_confirmation,
         load_config,
     )
@@ -57,14 +58,37 @@ except Exception as exc:  # pragma: no cover - exercised only on broken installs
 _adapter = None
 
 
+def _config_path() -> Optional[str]:
+    """First guard.yaml found in the standard locations, else None (defaults)."""
+    for candidate in (
+        Path.cwd() / "guard.yaml",
+        Path.home() / ".hermes" / "guard.yaml",
+        Path(__file__).resolve().parent.parent / "guard.yaml",
+    ):
+        if candidate.is_file():
+            return str(candidate)
+    return None
+
+
 def _get_adapter():
     global _adapter
     if GuardAdapter is None:
         return None
     if _adapter is None:
         try:
-            config = load_config("guard.yaml")
-            _adapter = GuardAdapter(config=config, audit=AuditLog(config=config))
+            config = load_config(_config_path())
+        except Exception as exc:
+            logger.warning("guard.yaml invalid: %s", exc)
+            return None
+        # An unwritable audit sink must not cost the host its guard: audit is
+        # observability, not enforcement, so run without it if it cannot open.
+        audit = None
+        try:
+            audit = AuditLog(config=config)
+        except Exception as exc:
+            logger.warning("audit log unavailable; continuing without it: %s", exc)
+        try:
+            _adapter = GuardAdapter(config=config, audit=audit)
         except Exception as exc:
             logger.warning("GuardAdapter init failed: %s", exc)
             return None
@@ -112,23 +136,27 @@ def wrap_untrusted_context(**kwargs) -> Optional[Dict[str, Any]]:
 def guard_tool_call(**kwargs) -> Optional[Dict[str, Any]]:
     """Evaluate a planned tool call; return a decision dict for the host.
 
-    Fail-closed: if the guard cannot evaluate the action (import/init failure
-    or a runtime exception), the host receives an explicit
-    ``deny`` / ``block=True`` decision rather than ``None`` (which an enforcing
-    host would treat as approval).
+    When the guard cannot evaluate the action (import/init failure or a runtime
+    exception) it degrades instead of denying everything: only kinds that are
+    dangerous by name are blocked, the rest are allowed and flagged. A guard
+    that takes the whole host down when its own audit file is unwritable is not
+    a security control, it is an outage. Set ``on_error: deny_all`` in
+    guard.yaml for the strict (0.2.x) behaviour.
     """
     action = _extract_action(kwargs)
     if action is None:
         return None
     adapter = _get_adapter()
     if adapter is None:
-        return _fail_closed_payload("guard adapter unavailable")
+        return _degraded_payload(action, _IMPORT_ERROR or "guard adapter unavailable")
     context = _extract_context(kwargs, adapter.config)
     try:
         decision = adapter.guard_action(action, context)
     except Exception as exc:
-        logger.warning("guard_action failed; failing closed: %s", exc)
-        return _fail_closed_payload(f"guard evaluation error: {exc}")
+        logger.warning("guard_action failed; degrading: %s", exc)
+        return _degraded_payload(
+            action, f"guard evaluation error: {exc}", config=adapter.config
+        )
     return _enforcement_payload(decision)
 
 
@@ -159,6 +187,59 @@ def _fail_closed_payload(message: str) -> Dict[str, Any]:
         "allowed": False,
         "requires_confirmation": False,
         "block": True,
+        "degraded": True,
+    }
+
+
+# Kinds that are dangerous from their name alone. Used ONLY when the policy
+# engine is unavailable, so the degraded fallback needs no package import.
+_DANGEROUS_KIND_TOKENS = (
+    "shell", "exec", "run_command", "subprocess", "spawn", "eval",
+    "install", "uninstall", "pip", "npm", "apt", "brew",
+    "skill_patch", "skill_create", "skill_delete", "skill_edit", "skill_write",
+    "self_improvement", "procedural_rule", "rule_approve",
+    "secret_send", "exfiltrate", "credential",
+)
+
+
+def _is_dangerous_by_name(kind: str) -> bool:
+    lowered = (kind or "").strip().lower()
+    return any(token in lowered for token in _DANGEROUS_KIND_TOKENS)
+
+
+def _degraded_payload(action, message: str, config=None) -> Dict[str, Any]:
+    """Decision used when the policy engine itself could not run.
+
+    ``on_error: deny_all`` restores hard fail-closed. The default blocks only
+    kinds that read as dangerous by name and lets ordinary host operations
+    (reads, listings, dashboards) continue, loudly flagged as ``degraded``.
+    """
+    on_error = str(getattr(config, "on_error", "degrade") or "degrade").lower()
+    kind = getattr(action, "kind", "") or ""
+    if on_error == "deny_all":
+        return _fail_closed_payload(message)
+    if _is_dangerous_by_name(kind):
+        payload = _fail_closed_payload(message)
+        payload["reason_code"] = "GUARD_DEGRADED_DANGEROUS_KIND"
+        payload["message"] = (
+            f"{message}; '{kind}' is dangerous by name and is blocked while the "
+            "guard is unavailable."
+        )
+        return payload
+    return {
+        "decision": "allow_with_warning",
+        "reason_code": "GUARD_DEGRADED_ALLOWED",
+        "message": (
+            f"{message}; action '{kind}' allowed unevaluated so the host keeps "
+            "working. Fix the guard installation or set on_error: deny_all."
+        ),
+        "transformed_action": None,
+        "audit_required": True,
+        "risk_score": 0.5,
+        "allowed": True,
+        "requires_confirmation": False,
+        "block": False,
+        "degraded": True,
     }
 
 
@@ -219,10 +300,15 @@ def _extract_action(kwargs: Dict[str, Any]):
 
 
 def _extract_context(kwargs: Dict[str, Any], config) -> GuardContext:
-    no_write, short_conf = _scope_flags(kwargs)
+    no_write, short_conf = _scope_flags(kwargs, config)
     return GuardContext(
-        mode=config.mode,
-        origin_trust=_enum(OriginTrust, kwargs.get("origin_trust"), OriginTrust.UNKNOWN),
+        mode=effective_mode(config.mode),
+        # A host that states no provenance gets UNSPECIFIED, not UNKNOWN.
+        # UNKNOWN counts as untrusted, which denied the host's own shell,
+        # install, and config operations for simply not passing a kwarg.
+        origin_trust=_enum(
+            OriginTrust, kwargs.get("origin_trust"), OriginTrust.UNSPECIFIED
+        ),
         data_sensitivity=_enum(DataSensitivity, kwargs.get("data_sensitivity"), DataSensitivity.PUBLIC),
         user_intent_origin=_enum(UserIntentOrigin, kwargs.get("user_intent_origin"), UserIntentOrigin.UNKNOWN),
         current_channel=kwargs.get("channel", ""),
@@ -240,20 +326,29 @@ def _extract_context(kwargs: Dict[str, Any], config) -> GuardContext:
     )
 
 
-def _scope_flags(kwargs: Dict[str, Any]) -> tuple:
+def _scope_flags(kwargs: Dict[str, Any], config=None) -> tuple:
     """Resolve no-write-scope / short-confirmation flags.
 
-    Explicit kwargs win. If they are absent but a raw ``user_message`` is
-    provided, fall back to the conservative text helpers so a host that cannot
-    set the flags still gets the gate (fail-safe direction only).
+    Explicit kwargs always win. Deriving them from raw ``user_message`` text is
+    OFF unless the operator opts in (``scope_from_text: true``, or a per-call
+    ``scope_from_text=True``): inferring intent from wording meant an everyday
+    "ok" or "zeig mir das Dashboard, nur lesen" denied every state-changing
+    action in the turn.
     """
-    user_message = kwargs.get("user_message") or ""
     no_write = kwargs.get("no_write_scope")
-    if no_write is None:
-        no_write = detect_no_write_scope(user_message) if user_message else False
     short_conf = kwargs.get("short_confirmation")
-    if short_conf is None:
-        short_conf = is_short_confirmation(user_message) if user_message else False
+    if no_write is not None and short_conf is not None:
+        return bool(no_write), bool(short_conf)
+
+    opt_in = kwargs.get("scope_from_text")
+    if opt_in is None:
+        opt_in = bool(getattr(config, "scope_from_text", False))
+    user_message = kwargs.get("user_message") or ""
+    if opt_in and user_message:
+        if no_write is None:
+            no_write = detect_no_write_scope(user_message)
+        if short_conf is None:
+            short_conf = is_short_confirmation(user_message)
     return bool(no_write), bool(short_conf)
 
 

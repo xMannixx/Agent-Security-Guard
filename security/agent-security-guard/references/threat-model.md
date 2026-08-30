@@ -59,6 +59,30 @@ in their own message**. A bare "yes" to a suggestion that originated in
 untrusted content does not authorize it (`CONFIRMATION_ORIGIN_UNTRUSTED`). This
 prevents the agent from becoming a social-engineering amplifier.
 
+## Availability is part of the threat model
+
+A guard that blocks the host's normal operation is not "safe by default", it is
+an outage — and an outage gets the guard uninstalled, which leaves zero
+protection. 0.2.x demonstrated this: it denied unrecognized tool kinds, treated
+ordinary project files as secret-bearing, read everyday wording as a no-write
+scope, treated a missing provenance kwarg as untrusted, and answered `deny` to
+every call when its own audit file could not be opened.
+
+The rule this establishes: **deny requires positive evidence of a dangerous
+transition.** Absence of information is not evidence.
+
+| Situation | Wrong (0.2.x) | Correct |
+|---|---|---|
+| Tool kind not in the table | `require_confirmation` (host enforces as blocked) | allow + audit; `strict` may ask |
+| Host passed no `origin_trust` | treated as untrusted -> hard deny | `unspecified` -> not untrusted, still audited |
+| Reading `app.log` / `memory.db` | sensitive -> poisons exfil chain | ordinary read |
+| Text says "ok" / "nur lesen" | deny all state changes | ignored unless `scope_from_text` |
+| Guard cannot load | deny everything | block only kinds dangerous by name |
+
+`tests/test_availability.py` enforces this direction, exactly as
+`tests/test_threat_regression.py` enforces the other. Neither may regress to
+satisfy the other.
+
 ## Non-goals (v1)
 
 - Perfect injection detection (regex is a secondary signal, not the judge)

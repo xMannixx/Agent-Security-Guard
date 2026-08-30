@@ -11,7 +11,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.8%2B-blue.svg" alt="Python 3.8+"></a>
   <img src="https://img.shields.io/badge/deps-stdlib%20only-success.svg" alt="Dependencies: stdlib only">
-  <img src="https://img.shields.io/badge/tests-180%20passing-success.svg" alt="Tests: 180 passing">
+  <img src="https://img.shields.io/badge/tests-246%20passing-success.svg" alt="Tests: 246 passing">
 </p>
 
 The companion to [`agent-memory`](../Agent%20memory%20skill). The memory skill
@@ -38,14 +38,38 @@ for transitions.
 Trust and sensitivity are separate axes and are never collapsed:
 
 - **OriginTrust** — *may this source give instructions?*
-  `trusted_user` > `local_project` / `trusted_tool_output` > `tool_output` >
-  `external_web` > `external_document` > `unknown`
+  `trusted_user` > `local_project` / `trusted_tool_output` > `unspecified` >
+  `tool_output` > `external_web` > `external_document` > `unknown`
 - **DataSensitivity** — *how dangerous if it leaks?*
   `public` < `internal` < `sensitive` < `secret`
 
 A `.env` file is high-trust origin but secret-sensitivity. Tool output inherits
 its payload origin: a web-fetch tool produces `external_web`, not trusted tool
 knowledge.
+
+`unspecified` vs `unknown` matters: `unspecified` means the host stated no
+provenance (its own internal tool call) and is **not** treated as untrusted;
+`unknown` means provenance was examined and could not be established, which is.
+
+## Operating modes (and the off switch)
+
+`mode` in [guard.yaml](guard.yaml) is enforced:
+
+| Mode | Behaviour |
+|---|---|
+| `monitor` | Never blocks. Reports what a blocking mode *would* have done in `advisory_decision`. Use when introducing the guard into a live host. |
+| `autonomous-safe` (default) | Blocks only the narrow, unambiguous danger set. Unrecognized tool kinds are allowed and audited. |
+| `strict` | Also stops and asks on unrecognized tool kinds. |
+
+To stop all blocking immediately, without editing any file:
+
+```bash
+export AGENT_SECURITY_GUARD_MODE=monitor
+```
+
+If the guard itself cannot run (bad config, unwritable audit file) it degrades —
+blocking only kinds that are dangerous by name — instead of denying every call.
+Set `on_error: deny_all` for hard fail-closed.
 
 ## Enforcement Mode vs Advisory Mode
 
@@ -65,7 +89,9 @@ knowledge.
 | web-suggested command relayed by a bare "yes" | `deny` | `CONFIRMATION_ORIGIN_UNTRUSTED` |
 | install from untrusted | `deny` | `INSTALL_FROM_UNTRUSTED` |
 | external write (default) | `require_confirmation` | `EXTERNAL_WRITE_REQUIRES_CONFIRMATION` |
+| external write to loopback / allowlisted domain | `allow` | `ALLOW_DEFAULT` |
 | external write of secret-class content | `deny` | `SECRET_EXTERNAL_SEND` |
+| unrecognized tool kind (non-strict) | `allow_with_warning` | `UNKNOWN_ACTION_AUDITED` |
 | untrusted -> `authorization`/`procedural` memory | `deny` | `UNTRUSTED_TO_AUTH_MEMORY` / `..._PROCEDURAL_MEMORY` |
 | untrusted -> `evidence` memory | `allow_with_warning` | `UNTRUSTED_TO_EVIDENCE_MEMORY` |
 
@@ -161,8 +187,18 @@ No runtime dependencies — pure stdlib. `pytest` only for development.
 
 ## Status & roadmap
 
-v0.2.0 — self-modification governance (180 tests green). Skill patch /
-self-improvement / procedural-rule changes are a dedicated `SELF_MODIFICATION`
+v0.3.0 — over-blocking fix (246 tests green). 0.2.x denied nearly every call in a
+live host, including the host's own tools, and `mode`/`tiers` in `guard.yaml`
+were never read, so there was no way to loosen it. Unknown tool kinds, ordinary
+project files, everyday confirmations, a missing provenance kwarg, and the
+guard's own failure no longer block. `monitor` mode and
+`AGENT_SECURITY_GUARD_MODE` give a real off switch.
+[tests/test_availability.py](security/agent-security-guard/tests/test_availability.py)
+now guards that direction, while every threat regression stays green. Details in
+[CHANGELOG.md](CHANGELOG.md).
+
+v0.2.0 — self-modification governance. Skill patch / self-improvement /
+procedural-rule changes are a dedicated `SELF_MODIFICATION`
 tier that is never a direct allow; an explicit no-write scope or an ambiguous
 "yes" is denied before any per-tier rule; and real writes require an explicit,
 hash-bound two-phase confirmation. The end-to-end bar
