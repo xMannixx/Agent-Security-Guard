@@ -24,7 +24,7 @@ from .audit import AuditLog, build_event
 from .memory_bridge import advise_memory_write
 from .modes import MODE_SOURCE_ENV, apply_mode, mode_with_source
 from .policy import load_config, path_is_sensitive
-from .scanner import classify_content, scan_input
+from .scanner import scan_input, secret_sensitivity
 from .sequence_guard import DEFAULT_CHAIN_WINDOW, ActionHistory, check_sequence
 from .types import (
     AgentAction,
@@ -157,15 +157,16 @@ class GuardAdapter:
     ) -> GuardContext:
         derived = context.data_sensitivity
         target = action.target or ""
-        if target and path_is_sensitive(target, self.config.sensitive_paths):
+        # A file: URL is a path with its characters possibly percent-encoded.
+        path = unquote(target) if target.strip().lower().startswith("file:") else target
+        if path and path_is_sensitive(path, self.config.sensitive_paths):
             derived = derived.max(DataSensitivity.SENSITIVE)
         blob = action.payload or ""
         if sends_to_remote(action):
             # A secret can leave in the address as well as in the body.
             blob = f"{unquote(target)}\n{blob}"
         if blob:
-            payload_class = classify_content(blob, None, self.config)
-            derived = derived.max(payload_class.data_sensitivity)
+            derived = derived.max(secret_sensitivity(blob, self.config))
         if derived is context.data_sensitivity:
             return context
         return dataclasses.replace(context, data_sensitivity=derived)

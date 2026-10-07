@@ -68,6 +68,11 @@ including `test_availability.py`, passes unchanged.
   (`SECRET_EXTERNAL_SEND`), and after a secret read a request that has room for
   data (query string, credentials in the URL, a body) needs confirmation
   (`tiers.read_with_data_after_secret`). A plain GET stays free.
+- **Secret reads the exfiltration chain did not see.** A web fetch pointed at a
+  `file:` URL reads the local disk but counted as a web read, and the plugin
+  looked only at `path` and `payload`, so `.env` read as `filename=` or a
+  secret posted as `body=` went unnoticed. `file:` targets are local reads
+  (percent-decoded), and the plugin reads the common argument names.
 - **A read method no longer vouches for an unknown tool.** `method: GET` in the
   arguments classified any unrecognized tool as read-only. A request with a
   body and no method is a write.

@@ -563,3 +563,23 @@ def test_summarizing_secret_content_locally_is_not_exfiltration():
         ),
     )
     assert decision.decision is Decision.ALLOW
+
+
+def test_ordinary_file_url_read_is_an_ordinary_local_read():
+    decision = GuardAdapter().guard_action(
+        AgentAction(kind="web_fetch", target="file:///proj/README.md"),
+        GuardContext(origin_trust=OriginTrust.LOCAL_PROJECT),
+    )
+    assert decision.decision is Decision.ALLOW
+    assert decision.reason_code is ReasonCode.ALLOW_LOCAL_READ
+
+
+def test_file_contents_are_not_scanned_as_a_request_body():
+    # write_file keeps its content on the machine; a config file that contains
+    # a credential must stay writable.
+    payload = guard_plugin.guard_tool_call(
+        tool_name="write_file",
+        args={"path": "notes.md", "content": "password: correct-horse-battery"},
+        origin_trust="trusted_user",
+    )
+    assert payload["allowed"] is True
