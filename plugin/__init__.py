@@ -14,13 +14,25 @@ Host contract (kwargs are best-effort; unknown shapes are ignored):
 - planned action: ``action={kind,target,method,...}`` (or ``tool_name``+``args``)
   plus optional provenance ``origin_trust``, ``data_sensitivity``,
   ``user_intent_origin``, ``chain_id``.
+
+What Hermes actually sends and reads (checked against its plugin dispatcher):
+- ``pre_tool_call`` gets ``tool_name``, ``args`` and ids (``session_id``,
+  ``turn_id``, ...), no provenance. Of the result it reads only ``action``:
+  ``block`` vetoes the call, ``approve`` sends it to the human-approval gate.
+  A result without ``action`` is ignored, so every non-allow decision carries
+  one (see ``_with_host_directive``).
+- ``pre_llm_call`` gets the user's message and ids, never ``untrusted_items``,
+  so the wrapper above has nothing to wrap there.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import sys
+import threading
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -155,6 +167,7 @@ def wrap_untrusted_context(**kwargs) -> Optional[Dict[str, Any]]:
     raw untrusted content is never passed through. Each item is replaced with a
     degraded-but-safe data block instead of being silently dropped.
     """
+    _remember_turn_scope(kwargs)
     items = _extract_untrusted_items(kwargs)
     if not items:
         return None
@@ -194,26 +207,88 @@ def guard_tool_call(**kwargs) -> Optional[Dict[str, Any]]:
     action = _extract_action(kwargs)
     if action is None:
         return None
+    fingerprint = _call_fingerprint(kwargs)
     adapter = _get_adapter()
     if adapter is None:
-        return _degraded_payload(
-            action, _IMPORT_ERROR or "guard adapter unavailable", config=_config
+        return _with_host_directive(
+            _degraded_payload(
+                action, _IMPORT_ERROR or "guard adapter unavailable", config=_config
+            ),
+            fingerprint,
         )
     try:
         context = _extract_context(kwargs, adapter)
         decision = adapter.guard_action(action, context)
     except Exception as exc:
         logger.warning("guard_action failed; degrading: %s", exc)
-        return _degraded_payload(
-            action,
-            f"guard evaluation error: {exc}",
-            config=adapter.config,
-            mode=getattr(adapter, "mode", None),
+        return _with_host_directive(
+            _degraded_payload(
+                action,
+                f"guard evaluation error: {exc}",
+                config=adapter.config,
+                mode=getattr(adapter, "mode", None),
+            ),
+            fingerprint,
         )
     payload = _enforcement_payload(decision)
     if _config_error:
         payload["config_error"] = _config_error
+    trusted_origin = (
+        not context.origin_trust.is_untrusted
+        and context.user_intent_origin is not UserIntentOrigin.UNTRUSTED_SUGGESTION
+    )
+    return _with_host_directive(payload, fingerprint, trusted_origin)
+
+
+# Denials that mean "the user has not ordered this", not "this is forbidden".
+# A host with a human-approval gate can obtain exactly that order.
+_NEEDS_USER_ORDER = frozenset({"SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER"})
+
+
+def _with_host_directive(
+    payload: Dict[str, Any], fingerprint: str, trusted_origin: bool = False
+) -> Dict[str, Any]:
+    """Add the directive Hermes acts on to a non-allow decision.
+
+    Hermes reads ``action`` from a ``pre_tool_call`` result and nothing else:
+    ``block`` vetoes the call (``message`` becomes the tool result) and
+    ``approve`` sends it to the human-approval gate, which fails closed when
+    nobody can answer. A result without ``action`` is ignored, so ``decision``
+    and ``block`` on their own never stopped anything there.
+
+    A confirmation becomes ``approve``. So does the one denial that only says
+    the user's order is missing, provided nothing untrusted proposed the call:
+    Hermes cannot say who asked, and its approval prompt is that order.
+    """
+    if payload.get("allowed"):
+        return payload
+    reason = str(payload.get("reason_code") or "")
+    if not payload.get("message"):
+        payload["message"] = f"Blocked by agent-security-guard ({reason})."
+    if payload.get("requires_confirmation") or (
+        trusted_origin and reason in _NEEDS_USER_ORDER
+    ):
+        payload["action"] = "approve"
+        # Hermes offers "always allow" per rule_key. Tying the key to this
+        # exact call keeps one approval from covering a different patch later.
+        payload["rule_key"] = f"agent-security-guard:{reason}:{fingerprint}"
+    else:
+        payload["action"] = "block"
     return payload
+
+
+def _call_fingerprint(kwargs: Dict[str, Any]) -> str:
+    """Short hash over the tool name and every argument of the call."""
+    spec = kwargs.get("action")
+    subject: Any = (
+        spec if isinstance(spec, dict)
+        else [kwargs.get("tool_name") or kwargs.get("tool"), _tool_args(kwargs)]
+    )
+    try:
+        raw = json.dumps(subject, sort_keys=True, default=str)
+    except Exception:  # unserializable or too deeply nested
+        raw = str(kwargs.get("tool_name") or kwargs.get("tool") or "")
+    return hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:12]
 
 
 def _enforcement_payload(decision) -> Dict[str, Any]:
@@ -400,7 +475,9 @@ def _extract_action(kwargs: Dict[str, Any]):
             ),
             method=args.get("method"),
             payload=args.get("payload"),
-            metadata=args,
+            # The model writes the arguments; it must not get to say which
+            # chain the call belongs to and so leave the one it is in.
+            metadata={k: v for k, v in args.items() if k != "chain_id"},
         )
     return None
 
@@ -434,7 +511,8 @@ def _extract_context(kwargs: Dict[str, Any], adapter) -> GuardContext:
         data_sensitivity=_enum(DataSensitivity, kwargs.get("data_sensitivity"), DataSensitivity.PUBLIC),
         user_intent_origin=_enum(UserIntentOrigin, kwargs.get("user_intent_origin"), UserIntentOrigin.UNKNOWN),
         current_channel=kwargs.get("channel", ""),
-        chain_id=kwargs.get("chain_id"),
+        # Hermes sends no chain_id but a turn_id: one user turn is one chain.
+        chain_id=kwargs.get("chain_id") or kwargs.get("turn_id") or None,
         domain_allowlist=config.domain_allowlist,
         config=config,
         no_write_scope_active=no_write,
@@ -466,12 +544,41 @@ def _scope_flags(kwargs: Dict[str, Any], config=None) -> tuple:
     if opt_in is None:
         opt_in = bool(getattr(config, "scope_from_text", False))
     user_message = kwargs.get("user_message") or ""
-    if opt_in and user_message:
+    if opt_in and isinstance(user_message, str) and user_message:
         if no_write is None:
             no_write = detect_no_write_scope(user_message)
         if short_conf is None:
             short_conf = is_short_confirmation(user_message)
+    elif opt_in:
+        remembered = _turn_scopes.get(kwargs.get("session_id"))
+        if remembered is not None:
+            if no_write is None:
+                no_write = remembered[0]
+            if short_conf is None:
+                short_conf = remembered[1]
     return bool(no_write), bool(short_conf)
+
+
+# Hermes hands the user's message to pre_llm_call only, the tool calls of that
+# turn arrive without it. What the message says about scope is kept per session
+# (the two flags, not the text) for the opt-in scope_from_text check.
+_turn_scopes: "OrderedDict[str, tuple]" = OrderedDict()
+_turn_scopes_lock = threading.Lock()
+_MAX_REMEMBERED_SESSIONS = 256
+
+
+def _remember_turn_scope(kwargs: Dict[str, Any]) -> None:
+    session, message = kwargs.get("session_id"), kwargs.get("user_message")
+    if GuardAdapter is None or not isinstance(session, str) or not session:
+        return
+    if not isinstance(message, str):
+        return
+    flags = (detect_no_write_scope(message), is_short_confirmation(message))
+    with _turn_scopes_lock:
+        _turn_scopes[session] = flags
+        _turn_scopes.move_to_end(session)
+        while len(_turn_scopes) > _MAX_REMEMBERED_SESSIONS:
+            _turn_scopes.popitem(last=False)
 
 
 def _enum(enum_cls, value, default):

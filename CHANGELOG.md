@@ -43,6 +43,14 @@ including `test_availability.py`, passes unchanged.
   namespace prefix such as `mcp__files__write_file`), file tools have their own
   tier (`local_write`), and a file tool writing `SKILL.md` or `guard.yaml` is
   self-modification.
+- **Decisions now reach Hermes in the form it acts on.** Hermes reads only
+  `action` from a `pre_tool_call` result (`block` or `approve`) and ignores
+  anything else. The plugin answered with `decision` and `block`, so in Hermes
+  every denial was computed and then not enforced. Non-allow decisions now
+  carry `action`: `block` for a denial, `approve` for a confirmation.
+- **Tool arguments can no longer move a call out of its chain.** A `chain_id`
+  in the model-written arguments reset the secret-read chain, turning the
+  denial of the following external write into an ordinary confirmation.
 - **An unrecognized tool is denied when untrusted content proposed it**
   (`UNTRUSTED_TO_UNKNOWN_ACTION`, when the host reports
   `user_intent_origin=untrusted_suggestion`). Tunable with
@@ -60,6 +68,14 @@ including `test_availability.py`, passes unchanged.
   adapter cannot be built.
 - A broken install (package not importable) now reaches the degraded decision
   instead of raising `NameError` from the hook.
+- **In Hermes, a self-modification without a stated user order is sent to the
+  approval prompt** (`action: approve`, `rule_key` bound to the exact call)
+  instead of being vetoed, because Hermes cannot tell the guard who asked. From
+  untrusted content it is still vetoed.
+- **One Hermes turn is one chain:** `turn_id` is used as `chain_id` when the
+  host passes no chain of its own, which also keeps sessions apart.
+- With `scope_from_text`, the plugin reads the no-write scope from the user
+  message Hermes gives `pre_llm_call`; only the two resulting flags are kept.
 - **Recognizing a host tool does not gate it more.** On a trusted or
   unspecified origin with nothing pointing at danger, `terminal`, `write_file`
   and the like are allowed and audited as they were while unrecognized

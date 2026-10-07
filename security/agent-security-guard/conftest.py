@@ -29,3 +29,26 @@ def isolated_plugin(monkeypatch, tmp_path):
     monkeypatch.delenv("AGENT_SECURITY_GUARD_MODE", raising=False)
     monkeypatch.chdir(tmp_path)
     return guard_plugin
+
+
+@pytest.fixture
+def hermes_reads():
+    """What Hermes makes of a ``pre_tool_call`` result: ``"block"``,
+    ``"approve"``, or ``None`` when it lets the tool run.
+
+    Mirrors its plugin dispatcher: only ``action`` is read, a block needs a
+    non-empty message, and a result without a known action is ignored.
+    """
+
+    def read(result):
+        if not isinstance(result, dict):
+            return None
+        action = result.get("action")
+        if action not in ("block", "approve"):
+            return None
+        message = result.get("message")
+        if action == "block" and not (isinstance(message, str) and message):
+            return None
+        return action
+
+    return read
