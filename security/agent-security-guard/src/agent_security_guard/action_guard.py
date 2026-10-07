@@ -27,7 +27,7 @@ _RISK_BY_DECISION = {
 
 def check_action(action: AgentAction, context: GuardContext) -> GuardDecision:
     """Classify and evaluate a single planned action."""
-    tier = classify_action(action)
+    tier = classify_action(action, context.config)
     decision = decide_action(action, tier, context)
     if decision.risk_score == 0.0:
         decision.risk_score = _RISK_BY_DECISION.get(decision.decision, 0.5)

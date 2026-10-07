@@ -265,11 +265,25 @@ def _is_dangerous_by_name(kind: str) -> bool:
 
 # The engine's other state-changing kinds, by exact name. With the package
 # importable the tier decides; this covers a broken install, where the name is
-# all there is. tests/test_plugin.py keeps it in step with the kind table.
+# all there is. tests/test_plugin.py keeps it in step with the engine's tables.
 _STATE_CHANGING_KIND_NAMES = frozenset({
     "run", "http_post", "http_put", "http_patch", "http_delete", "api_post",
     "external_write", "download", "fetch_file", "wget", "memory_write",
     "remember", "config_change", "profile_change", "settings_write",
+    # the names real hosts give their tools (host_tools.py)
+    "bash", "sh", "zsh", "pwsh", "terminal", "command", "run_terminal_cmd",
+    "run_terminal_command", "run_in_terminal", "run_code", "code_interpreter",
+    "python", "run_python", "python_repl", "run_script",
+    "write_file", "write", "file_write", "write_to_file", "create_file",
+    "save_file", "edit_file", "edit", "file_edit", "multi_edit", "multiedit",
+    "notebook_edit", "notebookedit", "patch", "apply_patch", "patch_file",
+    "apply_diff", "str_replace", "str_replace_editor",
+    "str_replace_based_edit_tool", "search_replace", "replace_in_file",
+    "insert_edit_into_file", "append_file", "append_to_file", "delete_file",
+    "remove_file", "move_file", "rename_file", "copy_file", "create_directory",
+    "send_email", "send_mail", "email_send", "upload", "upload_file", "git_push",
+    "skill_manage", "skill_update", "create_skill", "update_skill",
+    "edit_skill", "patch_skill", "delete_skill",
 })
 
 
@@ -287,8 +301,9 @@ def _blocked_while_degraded(action) -> bool:
     if GuardAdapter is None:
         return False
     try:
-        # What a name cannot tell: a generic request carrying a write method.
-        return is_state_changing(classify_action(normalize_action(action)))
+        # What a name cannot tell: a generic request carrying a write method,
+        # a tool the operator declared, a namespaced tool name.
+        return is_state_changing(classify_action(normalize_action(action), _config))
     except Exception:
         return True
 
@@ -379,7 +394,10 @@ def _extract_action(kwargs: Dict[str, Any]):
         args = _tool_args(kwargs)
         return AgentAction(
             kind=str(tool_name),
-            target=str(args.get("target") or args.get("url") or args.get("path") or ""),
+            target=str(
+                args.get("target") or args.get("url") or args.get("path")
+                or args.get("file_path") or ""
+            ),
             method=args.get("method"),
             payload=args.get("payload"),
             metadata=args,

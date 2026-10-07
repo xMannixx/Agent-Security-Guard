@@ -225,13 +225,25 @@ def test_pre_llm_call_uses_degraded_wrapper_when_unavailable(monkeypatch):
 
 def test_degraded_name_fallback_covers_every_state_changing_kind(monkeypatch):
     # With the package unimportable the plugin can only go by the kind name;
-    # that list must not fall behind the engine's kind table.
+    # that list must not fall behind the engine's kind and host-tool tables.
     from types import SimpleNamespace
 
     from agent_security_guard import is_state_changing
     from agent_security_guard.actions import _KIND_TIER
+    from agent_security_guard.host_tools import HOST_TOOL_TIER
 
     monkeypatch.setattr(guard_plugin, "GuardAdapter", None)
-    for kind, tier in _KIND_TIER.items():
+    for kind, tier in {**_KIND_TIER, **HOST_TOOL_TIER}.items():
         if is_state_changing(tier):
             assert guard_plugin._blocked_while_degraded(SimpleNamespace(kind=kind)), kind
+
+
+def test_host_tool_names_do_not_shadow_the_guards_own_kinds():
+    # A name in both tables would make "was this kind stated or guessed?"
+    # ambiguous, and every host-tool tier has to be state-changing.
+    from agent_security_guard import is_state_changing
+    from agent_security_guard.actions import _KIND_TIER
+    from agent_security_guard.host_tools import HOST_TOOL_TIER
+
+    assert not set(_KIND_TIER) & set(HOST_TOOL_TIER)
+    assert all(is_state_changing(tier) for tier in HOST_TOOL_TIER.values())

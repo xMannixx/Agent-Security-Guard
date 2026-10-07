@@ -25,8 +25,10 @@ from agent_security_guard import (
     OriginTrust,
     ReasonCode,
     UserIntentOrigin,
+    ActionTier,
     apply_mode,
     check_action,
+    classify_action,
     effective_mode,
     load_config,
     normalize_mode,
@@ -395,3 +397,96 @@ def test_monitor_mode_does_not_block_even_when_the_engine_raises(monkeypatch):
     payload = guard_plugin.guard_tool_call(action={"kind": "shell", "target": "x"})
     assert payload["allowed"] is True
     assert payload["degraded"] is True
+
+
+# --------------------------------------------------------------------------- #
+# 9. Recognizing a host's tools must not start blocking them
+# --------------------------------------------------------------------------- #
+
+# The tools a host works with all day, under the names it gives them.
+HOST_WORK_TOOLS = [
+    "terminal", "bash", "execute_code", "write_file", "patch", "edit",
+    "send_email",
+]
+
+
+@pytest.mark.parametrize("tool", HOST_WORK_TOOLS)
+def test_recognized_host_tools_are_not_blocked_without_evidence(tool):
+    # No provenance, as Hermes sends it: nothing points at danger, so the tool
+    # runs, audited, exactly as it did while it was unrecognized.
+    payload = guard_plugin.guard_tool_call(tool_name=tool, args={"path": "notes.md"})
+    assert payload["allowed"] is True, payload
+    assert payload["block"] is False, payload
+
+
+@pytest.mark.parametrize("tool", HOST_WORK_TOOLS)
+def test_recognized_host_tools_work_for_a_trusted_user(tool):
+    payload = guard_plugin.guard_tool_call(
+        tool_name=tool, args={"path": "notes.md"}, origin_trust="trusted_user"
+    )
+    assert payload["allowed"] is True, payload
+
+
+@pytest.mark.parametrize("tool", [
+    "read_terminal", "todo_write", "retrieval_search", "evaluate_model",
+    "memory", "send_message", "process_manage", "web_extract",
+])
+def test_names_that_only_resemble_dangerous_ones_stay_unrecognized(tool):
+    assert classify_action(AgentAction(kind=tool)) is ActionTier.UNKNOWN
+
+
+def test_untrusted_origin_alone_does_not_block_an_unknown_tool():
+    payload = guard_plugin.guard_tool_call(
+        tool_name="dashboard_query", args={}, origin_trust="external_web"
+    )
+    assert payload["allowed"] is True, payload
+
+
+def test_declared_read_tool_stays_free_even_when_untrusted_content_suggests_it():
+    config = load_config(None)
+    config.tool_tiers = {"codebase_search": "read_only"}
+    decision = check_action(
+        AgentAction(kind="codebase_search"),
+        GuardContext(
+            origin_trust=OriginTrust.EXTERNAL_WEB,
+            user_intent_origin=UserIntentOrigin.UNTRUSTED_SUGGESTION,
+            config=config,
+        ),
+    )
+    assert decision.decision is Decision.ALLOW
+
+
+@pytest.mark.parametrize("path", [
+    "docs/skills.md", "skill_notes.md", "guard_notes.yaml", "src/guard.py",
+    "notes/SKILL.md.bak",
+])
+def test_files_that_only_resemble_a_skill_are_ordinary_writes(path):
+    decision = check_action(
+        AgentAction(kind="write_file", target=path),
+        GuardContext(origin_trust=OriginTrust.LOCAL_PROJECT),
+    )
+    assert decision.decision is Decision.ALLOW_WITH_WARNING
+    assert decision.reason_code is ReasonCode.LOCAL_WRITE_AUDITED
+
+
+def test_explicit_user_order_can_still_edit_a_skill_with_a_file_tool():
+    decision = check_action(
+        AgentAction(kind="write_file", target="skills/style/SKILL.md"),
+        GuardContext(
+            origin_trust=OriginTrust.TRUSTED_USER,
+            user_intent_origin=UserIntentOrigin.HUMAN_EXPLICIT,
+        ),
+    )
+    assert decision.decision is Decision.REQUIRE_CONFIRMATION
+
+
+def test_operator_can_overrule_a_name_the_guard_reads_wrongly():
+    # A host whose `python` tool is a docs lookup declares it; the declaration
+    # wins over the built-in reading, also for untrusted origins.
+    config = load_config(None)
+    config.tool_tiers = {"python": "read_only"}
+    decision = check_action(
+        AgentAction(kind="python"),
+        GuardContext(origin_trust=OriginTrust.EXTERNAL_WEB, config=config),
+    )
+    assert decision.decision is Decision.ALLOW

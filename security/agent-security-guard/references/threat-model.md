@@ -36,6 +36,27 @@ Each class maps to a deterministic outcome, covered by
 | 7 | Unauthorized self-modification | Agent patches its own `SKILL.md` / procedural rules without an explicit user order, or off a bare "yes" / under a no-write scope | `SELF_MODIFICATION` tier is never a direct allow; no-write scope and ambiguous-confirmation gates deny first; a write needs an explicit, hash-bound confirmation (two-phase) | `EXPLICIT_NO_WRITE_SCOPE_VIOLATION`, `SHORT_CONFIRMATION_NO_PRIOR_AUTH`, `SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER` |
 | 8 | Neutralizing the guard | No rule is beaten; the guard is made to skip it: tool arguments shaped so the evaluation raises, an audit write that fails, a `guard.yaml` planted in the workspace, `AGENT_SECURITY_GUARD_MODE` flipped at runtime | Inputs are normalized before evaluation; an audit failure never replaces a decision; an evaluation error blocks state-changing kinds; policy is read only from operator locations, never the working directory; the mode is fixed when the guard starts | the rule's own code, or `GUARD_DEGRADED_DANGEROUS_KIND` |
 
+## Host tool names
+
+The classes above describe transitions, not tool names. A host forwards its
+tools under its own names (`terminal`, `execute_code`, `write_file`, `patch`,
+`skill_manage`), and while those were unrecognized they were "unknown actions"
+and allowed: classes 1, 6 and 7 held only for a tool literally named `shell` or
+`skill_patch`. Three things close that:
+
+- The common host names are recognized (exact names, also behind a namespace
+  prefix; a prefix can make a name stricter, never vouch that it is a read) and
+  get the hard rules of their tier. File tools have their own tier,
+  `local_write`; writing `SKILL.md` or `guard.yaml` with one is
+  self-modification (`self_modification_paths`).
+- The operator declares the rest in `tool_tiers`. A declared tool gets the full
+  rules of its tier, including its confirmation gate.
+- An undeclared, unrecognized tool is denied when the host reports that
+  untrusted content proposed it (`UNTRUSTED_TO_UNKNOWN_ACTION`).
+
+What the guard still cannot do is classify a tool nobody told it about when the
+host states no provenance either. That call is allowed and audited.
+
 ## Self-modification governance
 
 Patching a skill or approving a procedural rule changes the agent's *future*
@@ -74,7 +95,8 @@ transition.** Absence of information is not evidence.
 
 | Situation | Wrong (0.2.x) | Correct |
 |---|---|---|
-| Tool kind not in the table | `require_confirmation` (host enforces as blocked) | allow + audit; `strict` may ask |
+| Tool kind not in the table | `require_confirmation` (host enforces as blocked) | allow + audit; `strict` may ask; denied only when the host reports untrusted content proposed it |
+| Host tool recognized by name (`terminal`, `write_file`), trusted origin | (was unknown) | allow + audit, as before; the hard rules apply once something points at danger |
 | Host passed no `origin_trust` | treated as untrusted -> hard deny | `unspecified` -> not untrusted, still audited |
 | Reading `app.log` / `memory.db` | sensitive -> poisons exfil chain | ordinary read |
 | Text says "ok" / "nur lesen" | deny all state changes | ignored unless `scope_from_text` |

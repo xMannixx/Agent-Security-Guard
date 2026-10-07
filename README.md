@@ -99,9 +99,45 @@ defaults with `config_error` in its decisions).
 | external write (default) | `require_confirmation` | `EXTERNAL_WRITE_REQUIRES_CONFIRMATION` |
 | external write to loopback / allowlisted domain | `allow` | `ALLOW_DEFAULT` |
 | external write of secret-class content | `deny` | `SECRET_EXTERNAL_SEND` |
+| untrusted web/doc -> file write (`write_file`, `patch`, ...) | `deny` | `UNTRUSTED_TO_LOCAL_WRITE` |
+| file write from a trusted origin | `allow_with_warning` | `LOCAL_WRITE_AUDITED` |
+| file tool writing `SKILL.md` / `guard.yaml` | as self-modification | `SELF_MODIFICATION_...` |
+| host tool recognized by name, trusted origin, nothing pointing at danger | `allow_with_warning` | `HOST_TOOL_AUDITED` |
 | unrecognized tool kind (non-strict) | `allow_with_warning` | `UNKNOWN_ACTION_AUDITED` |
+| unrecognized tool kind proposed by untrusted content | `deny` | `UNTRUSTED_TO_UNKNOWN_ACTION` |
 | untrusted -> `authorization`/`procedural` memory | `deny` | `UNTRUSTED_TO_AUTH_MEMORY` / `..._PROCEDURAL_MEMORY` |
 | untrusted -> `evidence` memory | `allow_with_warning` | `UNTRUSTED_TO_EVIDENCE_MEMORY` |
+
+## Your host's tool names
+
+The rules above are written for the guard's own kinds (`shell`, `http_post`,
+`skill_patch`, ...), but a host forwards its tools under its own names: Hermes
+calls its shell `terminal`, OpenClaw's file writer is `write`. The guard
+recognizes the common ones (`bash`, `terminal`, `execute_code`, `write_file`,
+`edit`, `patch`, `apply_patch`, `send_email`, `skill_manage`, ..., also behind
+a namespace prefix such as `mcp__files__write_file`) and applies the same hard
+rules to them: denied from untrusted content, covered by a no-write scope, part
+of the exfiltration chain, and held to the self-modification bar when they
+touch `SKILL.md` or `guard.yaml`.
+
+Recognition does not make the guard ask more. On a trusted or unspecified
+origin, with nothing pointing at danger, a recognized host tool is allowed and
+audited as before (`tiers.recognized_host_tool`); only a kind the host names
+explicitly, or a tool you declare, gets the confirmation gate of its tier.
+
+For names the guard does not know, or reads wrongly, declare the tier in
+`guard.yaml`. A declaration wins over the built-in tables:
+
+```yaml
+tool_tiers:
+  codebase_search: read_only
+  cronjob_manage: config_change
+  my_deploy_tool: execution
+```
+
+An undeclared, unrecognized tool is allowed and audited, except when the host
+reports that untrusted content proposed the call
+(`user_intent_origin=untrusted_suggestion`): then it is denied.
 
 ## Installation
 

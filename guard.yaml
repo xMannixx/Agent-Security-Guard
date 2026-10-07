@@ -62,15 +62,52 @@ tiers:
   # took hosts down in 0.2.x. Raise to require_confirmation only if your host
   # can actually surface a prompt for every unknown tool.
   unknown_action: allow_with_warning
+  # ...unless the host itself says untrusted content proposed the action. That
+  # is evidence, so the default is deny. If it catches a harmless tool, declare
+  # that tool in `tool_tiers` below rather than loosening this.
+  unknown_action_from_untrusted: deny
+  # A file write by a host file tool (write_file, patch, edit, ...) on a
+  # trusted origin.
+  local_write: allow_with_warning
+  # A host tool the guard recognized by its name (terminal, bash,
+  # execute_code, send_email, ...) on a trusted origin with nothing pointing at
+  # danger. The host never opted into a confirmation flow for it, so asking
+  # would block the host's own tool. Set to require_confirmation only if your
+  # host can surface a prompt. Kinds the host names explicitly (shell,
+  # http_post, ...) and tools declared in `tool_tiers` use the settings above.
+  recognized_host_tool: allow_with_warning
   # Non-tunable, listed for transparency:
   shell_from_untrusted: deny
   install_from_untrusted: deny
+  local_write_from_untrusted: deny
   memory_external_to_evidence: allow_with_warning
   memory_external_to_identity: require_confirmation
   memory_external_to_authorization: deny
   memory_external_to_procedural: deny
   download_then_execute_untrusted: deny
   download_then_execute_user: require_confirmation
+
+# Tiers for your host's own tools: `tool name: tier`. The guard knows the common
+# names (terminal, bash, execute_code, write_file, patch, skill_manage, ...);
+# declare what it does not know or reads wrongly. A declaration wins over the
+# built-in tables and gives the tool the full rules of its tier.
+# Tiers: read_only, local_read, local_write, external_write, execution,
+#        download, install, config_change, memory_write, self_modification,
+#        secret_handling, unknown.
+# Example:
+#   tool_tiers:
+#     codebase_search: read_only
+#     cronjob_manage: config_change
+#     my_deploy_tool: execution
+tool_tiers: {}
+
+# Writing one of these with a file tool changes the agent's own future
+# behavior, so it is held to the self-modification bar (explicit user order,
+# never a direct allow) instead of being treated as a plain file write. Same
+# pattern syntax as sensitive_paths; matched case-insensitively.
+self_modification_paths:
+  - "SKILL.md"
+  - "guard.yaml"
 
 # Real secret material only. Anything listed here raises DataSensitivity, and a
 # sensitive read then gates later external writes via the exfiltration chain.

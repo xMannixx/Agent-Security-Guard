@@ -101,7 +101,7 @@ class ActionHistory:
         decision: Optional[Decision] = None,
     ) -> HistoryEntry:
         entry = HistoryEntry(
-            tier=classify_action(action),
+            tier=classify_action(action, context.config),
             origin_trust=context.origin_trust,
             data_sensitivity=context.data_sensitivity,
             target=action.target,
@@ -151,7 +151,7 @@ def check_sequence(
     action: AgentAction, history: ActionHistory, context: GuardContext
 ) -> GuardDecision:
     """Evaluate the action against the recent chain; strictest rule wins."""
-    tier = classify_action(action)
+    tier = classify_action(action, context.config)
     current = derive_category(tier, context.origin_trust, context.data_sensitivity)
     chain_id = context.chain_id or _meta_chain_id(action)
     past = history.relevant(chain_id)
