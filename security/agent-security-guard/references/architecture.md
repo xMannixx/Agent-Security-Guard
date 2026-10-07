@@ -70,6 +70,7 @@ flowchart TD
 | `wrapper.py` | `wrap_untrusted` boundary block |
 | `sequence_guard.py` | `ActionHistory`, `check_sequence` kill chains |
 | `audit.py` | `AuditLog` (SQLite/JSONL), `record_event`, `build_event` |
+| `memory_lanes.py` | One reading of a memory lane name and of a write's source, for policy, sequence guard and bridge |
 | `memory_bridge.py` | `advise_memory_write` (advice-only) |
 | `adapter.py` | `GuardAdapter` per-session facade |
 | `__main__.py` | CLI |

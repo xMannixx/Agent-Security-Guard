@@ -122,6 +122,35 @@ def test_web_read_then_evidence_memory_allowed_with_warning():
     assert d.reason_code is ReasonCode.UNTRUSTED_TO_EVIDENCE_MEMORY
 
 
+def _memory_after_web_read(lane):
+    action = AgentAction(kind="memory_write", desired_memory_lane=lane)
+    return check_sequence(action, hist(web_read_entry()), GuardContext())
+
+
+def test_web_read_then_privileged_memory_under_another_name_denied():
+    for lane, reason in (
+        ("auth", ReasonCode.UNTRUSTED_TO_AUTH_MEMORY),
+        ("rules", ReasonCode.UNTRUSTED_TO_PROCEDURAL_MEMORY),
+        ("system", ReasonCode.UNTRUSTED_TO_PROCEDURAL_MEMORY),
+    ):
+        d = _memory_after_web_read(lane)
+        assert d.decision is Decision.DENY, lane
+        assert d.reason_code is reason, lane
+
+
+def test_web_read_then_memory_without_a_readable_lane_is_asked_about():
+    for lane in (None, "", "core"):
+        d = _memory_after_web_read(lane)
+        assert d.decision is Decision.REQUIRE_CONFIRMATION, lane
+        assert d.reason_code is ReasonCode.UNTRUSTED_CONTENT_IN_CONTEXT, lane
+
+
+def test_web_read_then_preference_memory_is_asked_about():
+    d = _memory_after_web_read("preference")
+    assert d.decision is Decision.REQUIRE_CONFIRMATION
+    assert d.reason_code is ReasonCode.UNTRUSTED_TO_PREFERENCE_MEMORY
+
+
 def test_clean_sequence_allowed():
     history = hist(HistoryEntry(tier=ActionTier.READ_ONLY, origin_trust=OriginTrust.TRUSTED_USER))
     action = AgentAction(kind="http_get", target="https://x")

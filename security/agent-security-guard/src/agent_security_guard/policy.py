@@ -22,6 +22,18 @@ from urllib.parse import urlsplit
 from . import _miniyaml
 from .actions import recognized_by_name_only, sends_to_remote
 from .host_tools import UNTRUSTED_CONTENT_TOOLS
+from .memory_lanes import (
+    CONVERSATION,
+    NO_LANE,
+    OBSERVATION,
+    PERSONAL_LANES,
+    PRIVILEGED_LANES,
+    UNKNOWN_LANE,
+    read_lane,
+    read_source,
+    source_is_untrusted,
+    validated_memory_lanes,
+)
 from .modes import MODE_STRICT, effective_mode, normalize_mode
 from .types import (
     ActionTier,
@@ -55,8 +67,17 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "config_change": "require_confirmation",
         "memory_external_to_evidence": "allow_with_warning",
         "memory_external_to_identity": "require_confirmation",
+        "memory_external_to_preference": "require_confirmation",
         "memory_external_to_authorization": "deny",
         "memory_external_to_procedural": "deny",
+        # A write to authorization / procedural memory on a trusted origin that
+        # does not state where the fact comes from. Those lanes are written
+        # from direct observation only, and nobody said this is one.
+        "memory_unsourced_to_privileged": "require_confirmation",
+        # A memory write from an untrusted source that names no lane, or one
+        # the guard cannot read. It cannot be told from a privileged write.
+        # Declare the lane in `memory_lanes` rather than loosening this.
+        "memory_external_to_unknown_lane": "deny",
         "download_inspect": "allow",
         "download_then_execute_untrusted": "deny",
         "download_then_execute_user": "require_confirmation",
@@ -95,6 +116,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # Writing these with a file tool changes the agent's own future behavior,
     # so it is held to the self-modification bar, not treated as a plain write.
     "self_modification_paths": ["SKILL.md", "guard.yaml"],
+    # The host's own names for memory lanes: {lane name: one of identity,
+    # preference, evidence, authorization, procedural}.
+    "memory_lanes": {},
     # Tools whose result is content from outside the machine (glob patterns).
     "untrusted_content_tools": list(UNTRUSTED_CONTENT_TOOLS),
     # The plugin wraps the results of those tools as data blocks.
@@ -149,6 +173,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 }
 
 
+_MERGED_SECTIONS = ("tiers", "audit", "limits", "tool_tiers", "memory_lanes")
+
+
 def load_config(path: Optional[str] = None) -> GuardConfig:
     """Load ``guard.yaml`` merged over built-in defaults.
 
@@ -162,7 +189,7 @@ def load_config(path: Optional[str] = None) -> GuardConfig:
         if not isinstance(loaded, dict):
             raise ValueError("guard.yaml must be a mapping at the top level")
         for key, value in loaded.items():
-            if key in ("tiers", "audit", "limits", "tool_tiers") and isinstance(value, dict):
+            if key in _MERGED_SECTIONS and isinstance(value, dict):
                 merged[key] = {**merged.get(key, {}), **value}
             else:
                 merged[key] = value
@@ -183,6 +210,7 @@ def load_config(path: Optional[str] = None) -> GuardConfig:
             for pattern in (merged.get("untrusted_content_tools") or [])
         ],
         wrap_tool_results=bool(merged.get("wrap_tool_results", True)),
+        memory_lanes=validated_memory_lanes(merged.get("memory_lanes")),
     )
 
 
@@ -223,6 +251,7 @@ def _deep_copy_defaults() -> Dict[str, Any]:
         "self_modification_paths": list(DEFAULT_CONFIG["self_modification_paths"]),
         "untrusted_content_tools": list(DEFAULT_CONFIG["untrusted_content_tools"]),
         "wrap_tool_results": DEFAULT_CONFIG["wrap_tool_results"],
+        "memory_lanes": dict(DEFAULT_CONFIG["memory_lanes"]),
     }
 
 
@@ -783,46 +812,85 @@ def _decide_config_change(action: AgentAction, context: GuardContext) -> GuardDe
     )
 
 
-# Lanes that untrusted sources may never promote into.
-_PRIVILEGED_LANES = {
-    "authorization": ReasonCode.UNTRUSTED_TO_AUTH_MEMORY,
-    "procedural": ReasonCode.UNTRUSTED_TO_PROCEDURAL_MEMORY,
-}
-_TRUSTED_MEMORY_SOURCES = frozenset({"observation"})
-
-
 def _decide_memory_write(action: AgentAction, context: GuardContext) -> GuardDecision:
-    lane = (action.desired_memory_lane or "evidence").strip().lower()
-    source = (action.memory_source or "").strip().lower()
+    """A write to the agent's memory, judged by the lane it names.
+
+    ``untrusted`` is evidence about this write: the origin of the call, what
+    proposed it, or a stated source that is neither observation nor
+    conversation. Without it only the privileged lanes are held back.
+    """
+    stated = (action.desired_memory_lane or "").strip()
+    lane = read_lane(stated, context.config)
+    source = read_source(action.memory_source)
     untrusted = (
         _untrusted(context)
         or _suggested_by_untrusted(context)
-        or (source != "" and source not in _TRUSTED_MEMORY_SOURCES)
+        or source_is_untrusted(source)
     )
+
+    if lane in PRIVILEGED_LANES:
+        if untrusted or source == CONVERSATION:
+            return _deny(
+                PRIVILEGED_LANES[lane],
+                f"'{lane}' memory is written from direct observation only; "
+                f"this write ({_source_label(source, untrusted)}) cannot "
+                "promote to it. Evidence is the lane it may use.",
+            )
+        if source == OBSERVATION:
+            return _audited(_allow(
+                ReasonCode.PRIVILEGED_MEMORY_AUDITED,
+                f"Observation may write '{lane}' memory; allowed and audited.",
+            ))
+        # Nobody said where this comes from. A plain allow here let any
+        # caller that left the source out write a permission or a rule
+        # without a trace.
+        return _audited(_tuned(
+            tier_setting(
+                context, "memory_unsourced_to_privileged", Decision.REQUIRE_CONFIRMATION
+            ),
+            ReasonCode.PRIVILEGED_MEMORY_REQUIRES_CONFIRMATION,
+            f"Write to '{lane}' memory without a stated source; that lane is "
+            "written from direct observation only.",
+        ))
+
+    if lane in (NO_LANE, UNKNOWN_LANE):
+        # Not presumed to be evidence: the guard cannot tell this write from
+        # one to a privileged lane.
+        what = f"lane '{stated}', which the guard does not know" if stated else "no lane"
+        if untrusted:
+            return _audited(_tuned(
+                tier_setting(context, "memory_external_to_unknown_lane", Decision.DENY),
+                ReasonCode.UNTRUSTED_TO_UNKNOWN_MEMORY_LANE,
+                f"Memory write from an untrusted source names {what}; it "
+                "cannot be told from a privileged write. Evidence is the "
+                "lane it may use.",
+            ))
+        return _decide(
+            Decision.ALLOW_WITH_WARNING,
+            ReasonCode.UNKNOWN_MEMORY_LANE_AUDITED,
+            f"Memory write names {what}; trusted origin, allowed and audited.",
+        )
 
     if not untrusted:
         return _allow(ReasonCode.ALLOW_DEFAULT, f"Memory write to '{lane}' allowed.")
 
-    if lane in _PRIVILEGED_LANES:
-        return GuardDecision(
-            decision=Decision.DENY,
-            reason_code=_PRIVILEGED_LANES[lane],
-            message=(
-                f"Untrusted source cannot promote to '{lane}' memory; "
-                "evidence only."
-            ),
-        )
-    if lane == "identity":
+    if lane in PERSONAL_LANES:
         return _decide(
             Decision.REQUIRE_CONFIRMATION,
-            ReasonCode.UNTRUSTED_TO_IDENTITY_MEMORY,
-            "Untrusted source writing identity memory requires confirmation.",
+            PERSONAL_LANES[lane],
+            f"Untrusted source writing {lane} memory requires confirmation.",
         )
     return _decide(
         Decision.ALLOW_WITH_WARNING,
         ReasonCode.UNTRUSTED_TO_EVIDENCE_MEMORY,
-        f"Untrusted source quarantined to evidence (requested '{lane}').",
+        "Untrusted source writing evidence memory; allowed and audited.",
     )
+
+
+def _source_label(source: str, untrusted: bool) -> str:
+    if source:
+        return f"source '{source}'"
+    return "untrusted origin" if untrusted else "no stated source"
 
 
 # --------------------------------------------------------------------------- #
@@ -858,6 +926,12 @@ def _allow(reason: ReasonCode, message: str) -> GuardDecision:
         message=message,
         audit_required=False,
     )
+
+
+def _audited(decision: GuardDecision) -> GuardDecision:
+    """Keep the audit record also where the outcome is a plain allow."""
+    decision.audit_required = True
+    return decision
 
 
 def _deny(reason: ReasonCode, message: str) -> GuardDecision:

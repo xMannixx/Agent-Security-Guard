@@ -82,19 +82,32 @@ tiers:
   local_write_from_untrusted: deny
   memory_external_to_evidence: allow_with_warning
   memory_external_to_identity: require_confirmation
+  memory_external_to_preference: require_confirmation
   memory_external_to_authorization: deny
   memory_external_to_procedural: deny
   download_then_execute_untrusted: deny
   download_then_execute_user: require_confirmation
+  # A memory write from an untrusted source that names no lane, or one the
+  # guard cannot read. It cannot be told from a privileged write, so the
+  # default is deny. If it catches a harmless lane of yours, declare that lane
+  # in `memory_lanes` below rather than loosening this.
+  memory_external_to_unknown_lane: deny
+  # A write to authorization / procedural memory on a trusted origin that does
+  # not state its source. Those lanes are written from direct observation
+  # only (`memory_source: observation`), and nobody said this is one. Audited
+  # whatever you set. A source in a tool call's arguments is the model's own
+  # claim and does not count. Tunable: deny, require_confirmation,
+  # allow_with_warning, allow.
+  memory_unsourced_to_privileged: require_confirmation
   # After a secret was read in the chain: a GET-like request to a URL that has
   # room for data (query string, credentials in the URL, a body). Asked about
   # rather than denied, because such requests are ordinary; a plain GET stays
   # free. Tunable: deny, require_confirmation, allow_with_warning, allow.
   read_with_data_after_secret: require_confirmation
   # After untrusted content (a web page, search results) was read in the chain:
-  # a shell command, file write, install, config change, external write or
-  # self-modification. The content may be what proposed the action, so the user
-  # is asked. Reads and unrecognized tools stay free, and so does an action the
+  # a shell command, file write, install, config change, external write,
+  # self-modification, or a memory write that names no lane the guard knows.
+  # The content may be what proposed the action, so the user is asked. Reads and unrecognized tools stay free, and so does an action the
   # host reports as explicitly ordered by the user. In Hermes one user turn is
   # one chain, and the prompt offers "allow for this session" per tool.
   # Tunable: deny, require_confirmation, allow_with_warning (audit only), allow.
@@ -113,7 +126,26 @@ tiers:
 #     codebase_search: read_only
 #     cronjob_manage: config_change
 #     my_deploy_tool: execution
+#
+# Memory tools are not recognized by name (Hermes: `memory`). Unrecognized, a
+# memory write is allowed and audited, also after a web page was read. To put
+# it under the memory rules, declare it:
+#   tool_tiers:
+#     memory: memory_write
+# It is then asked about once outside content is in the chain, and denied when
+# untrusted content proposed it.
 tool_tiers: {}
+
+# Your memory's own lane names, mapped to the lane they amount to: identity,
+# preference, evidence, authorization, procedural. The guard reads the five
+# names and common other spellings of the strict ones (auth, permissions,
+# rules, system, ...). Any other name is a lane it does not know: allowed and
+# audited on a trusted origin, denied from an untrusted source.
+# Example:
+#   memory_lanes:
+#     notes: evidence
+#     standing_orders: procedural
+memory_lanes: {}
 
 # Tools whose result is content from outside the machine (glob patterns over
 # the tool name). Their results are wrapped as data, and after one of them the

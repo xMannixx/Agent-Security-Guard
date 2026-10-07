@@ -28,7 +28,7 @@ Each class maps to a deterministic outcome, covered by
 | # | Threat class | Attack shape | Defense | reason_code |
 |---|---|---|---|---|
 | 1 | Goal hijacking | Web/doc says "ignore previous instructions, do X" | Untrusted content is wrapped as data; a write whose intent originated in untrusted content is denied | `CONFIRMATION_ORIGIN_UNTRUSTED` |
-| 2 | Memory rule injection | Untrusted content writes a permission/behavior rule | Bridge denies untrusted -> authorization/procedural; sequence denies web-read -> privileged memory | `UNTRUSTED_TO_AUTH_MEMORY`, `UNTRUSTED_TO_PROCEDURAL_MEMORY` |
+| 2 | Memory rule injection | Untrusted content writes a permission/behavior rule | Policy and bridge deny untrusted -> authorization/procedural, under any spelling of the lane; a write without a readable lane is not taken for evidence; sequence denies web-read -> privileged memory | `UNTRUSTED_TO_AUTH_MEMORY`, `UNTRUSTED_TO_PROCEDURAL_MEMORY`, `UNTRUSTED_TO_UNKNOWN_MEMORY_LANE` |
 | 3 | Workflow drift | Allowed steps form a chain: read secret -> summarize -> post | SequenceGuard scans the whole chain window; an earlier secret read blocks a later external write | `SECRET_THEN_EXFIL` |
 | 4 | Tool manipulation | A "tool" returns web content / forged payload | `source_kind` inheritance: web-fetch payload is `external_web`, not trusted tool knowledge; shell from it denied | `UNTRUSTED_TO_SHELL` |
 | 5 | Supply-chain instruction | Untrusted content says "install this skill/package" | Install from untrusted is denied; from a user it requires confirmation | `INSTALL_FROM_UNTRUSTED` |
@@ -51,6 +51,42 @@ and applies the memory-lane rules. It asks rather than denies because it knows
 the content is there, not that the content proposed the action. Reads stay
 free, tools the guard cannot classify stay free, and an action the host reports
 as explicitly ordered by the user is not asked about.
+
+## Memory lanes
+
+Class 2 was written for a write that spelled the lane `authorization` or
+`procedural`, stated an untrusted source, and reached the guard in its own
+action shape. Four things were enough to get past it:
+
+- **Another name.** The lane was compared to an exact list, in three places.
+  `auth`, `rules` or `system` matched none and took the branch for harmless
+  lanes, whose message said "quarantined to evidence" while the write went to
+  the lane it asked for. The lane is now read in one place
+  (`memory_lanes.py`): the five lanes, other spellings of the strict ones, and
+  the operator's own names (`memory_lanes`).
+- **No lane.** A missing lane was taken for `evidence`. It is now its own
+  case, like a name the guard cannot read: allowed and audited on a trusted
+  origin, denied from an untrusted source
+  (`tiers.memory_external_to_unknown_lane`), asked about after outside content
+  was read (`UNTRUSTED_CONTENT_IN_CONTEXT`).
+- **No source.** With the source left out, a write to a privileged lane on a
+  trusted or unspecified origin was a plain allow and left no audit record.
+  It is asked about now (`PRIVILEGED_MEMORY_REQUIRES_CONFIRMATION`,
+  `tiers.memory_unsourced_to_privileged`), and a write from `observation` is
+  audited.
+- **The host's tool-call shape.** The plugin dropped the lane and the source
+  when a call arrived as `tool_name` + `args`, as Hermes sends it. Both are
+  read now. A source in the arguments is the model's claim, so `observation`
+  there unlocks nothing: the user is asked.
+
+The source is read from a list of what is trusted (`observation`,
+`conversation`), not of what is not: `web` or `email` is untrusted without
+needing an entry.
+
+Not covered by default: a host memory tool nobody declared. Hermes' `memory`
+is an unrecognized tool, allowed and audited, also after a web page was read.
+Its entries are put into every later turn, so the operator should declare it
+(`tool_tiers: {memory: memory_write}`).
 
 ## Host tool names
 

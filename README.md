@@ -108,8 +108,14 @@ defaults with `config_error` in its decisions).
 | host tool recognized by name, trusted origin, nothing pointing at danger | `allow_with_warning` | `HOST_TOOL_AUDITED` |
 | unrecognized tool kind (non-strict) | `allow_with_warning` | `UNKNOWN_ACTION_AUDITED` |
 | unrecognized tool kind proposed by untrusted content | `deny` | `UNTRUSTED_TO_UNKNOWN_ACTION` |
-| untrusted -> `authorization`/`procedural` memory | `deny` | `UNTRUSTED_TO_AUTH_MEMORY` / `..._PROCEDURAL_MEMORY` |
+| untrusted -> `authorization`/`procedural` memory, also under another name (`auth`, `permissions`, `rules`, `system`, ...) | `deny` | `UNTRUSTED_TO_AUTH_MEMORY` / `..._PROCEDURAL_MEMORY` |
+| untrusted -> memory write that names no lane, or one the guard cannot read | `deny` | `UNTRUSTED_TO_UNKNOWN_MEMORY_LANE` |
+| untrusted -> `identity` / `preference` memory | `require_confirmation` | `UNTRUSTED_TO_IDENTITY_MEMORY` / `..._PREFERENCE_MEMORY` |
 | untrusted -> `evidence` memory | `allow_with_warning` | `UNTRUSTED_TO_EVIDENCE_MEMORY` |
+| `authorization`/`procedural` memory on a trusted origin, no source stated | `require_confirmation` | `PRIVILEGED_MEMORY_REQUIRES_CONFIRMATION` |
+| `authorization`/`procedural` memory from `observation`, trusted origin | `allow`, audited | `PRIVILEGED_MEMORY_AUDITED` |
+| memory write without a readable lane, trusted origin | `allow_with_warning` | `UNKNOWN_MEMORY_LANE_AUDITED` |
+| after a web page or search result was read in the chain: memory write without a readable lane | `require_confirmation` | `UNTRUSTED_CONTENT_IN_CONTEXT` |
 
 ## Your host's tool names
 
@@ -141,6 +147,40 @@ tool_tiers:
 An undeclared, unrecognized tool is allowed and audited, except when the host
 reports that untrusted content proposed the call
 (`user_intent_origin=untrusted_suggestion`): then it is denied.
+
+## Memory writes
+
+A memory write (`memory_write`, `remember`) is judged by the lane it names:
+`evidence`, `preference`, `identity`, `authorization`, `procedural`. The last
+two say what the agent may do and how it behaves. They are written from direct
+observation only (`memory_source: observation`): from anything untrusted they
+are denied, and without a stated source the user is asked. Other spellings of
+them (`auth`, `permissions`, `rules`, `system`, ...) are read as what they are.
+
+A write that names no lane, or a lane the guard does not know, is not taken for
+evidence. On a trusted origin it is allowed and audited; from an untrusted
+source it is denied, and once a web page was read in the chain it is asked
+about. Give your memory's own lane names a meaning in `guard.yaml`:
+
+```yaml
+memory_lanes:
+  notes: evidence
+  standing_orders: procedural
+```
+
+The plugin reads the lane and the source from a tool call's arguments
+(`lane`, `memory_lane`, `desired_memory_lane`; `source`, `memory_source`). A
+source there is the model's own claim: it can make a write less trusted, never
+more.
+
+Memory tools are not recognized by name. Hermes' `memory` tool is an
+unrecognized tool by default, so its writes are allowed and audited, also after
+a web page was read. To put it under the rules above:
+
+```yaml
+tool_tiers:
+  memory: memory_write
+```
 
 ## Installation
 

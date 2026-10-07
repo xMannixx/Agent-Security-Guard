@@ -58,10 +58,12 @@ _SELF_MODIFICATION = (
     "edit_skill", "patch_skill", "delete_skill",
 )
 
-# Memory tools (Hermes: ``memory``) are deliberately absent too. A raw tool call
-# does not say which lane it writes, so as MEMORY_WRITE it would be judged as an
-# evidence write and waved through even when untrusted content proposed it.
-# Unrecognized, that same call is denied.
+# Memory tools (Hermes: ``memory``) are deliberately absent too. Recognized,
+# a memory write would be asked about once outside content is in the chain, and
+# ``test_availability.py`` holds that it stays free there. The operator opts in
+# by declaring the tool as ``memory_write`` in ``tool_tiers``. A call that names
+# no lane is then not taken for an evidence write: untrusted content may not
+# make it, and after outside content it is asked about.
 
 _INSTALL = (
     "install_package", "package_install", "apt_install", "brew_install",

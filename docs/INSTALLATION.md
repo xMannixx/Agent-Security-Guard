@@ -171,6 +171,12 @@ What acts in Hermes, and what cannot:
   The prompt offers "allow for this session" per tool. Reads and tools the
   guard cannot classify stay free, and the next turn starts clean. Set
   `tiers.after_untrusted_content: allow_with_warning` to only record it.
+- **Memory needs one line from you:** Hermes' `memory` tool is not recognized
+  by name, so its writes are allowed and audited, also after a web page was
+  read in the turn. Its entries are put into every later turn, so a page that
+  gets a line written there keeps its say. With `tool_tiers: {memory:
+  memory_write}` in `guard.yaml`, a memory write in a turn that read outside
+  content goes to the approval prompt.
 - **Cannot act:** rules that depend on who asked for an action ("untrusted
   content cannot run a shell" as a denial). Hermes passes the hook no
   provenance, and the plugin does not invent any. The rule above is the

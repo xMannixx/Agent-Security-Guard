@@ -72,6 +72,17 @@ are denied from untrusted content. Declare anything else in `tool_tiers`
 (`guard.yaml`). An unrecognized tool is allowed and audited, and denied when
 the host reports that untrusted content proposed it.
 
+## Memory writes
+
+A memory write is judged by its lane. `authorization` and `procedural` (also
+spelled `auth`, `permissions`, `rules`, `system`, ...) are written from direct
+observation only: denied from anything untrusted, asked about when no source
+is stated. A write that names no lane the guard knows is not taken for
+evidence: allowed and audited on a trusted origin, denied from an untrusted
+source, asked about after outside content was read. Map your own lane names in
+`memory_lanes`. A host memory tool is unrecognized until you declare it
+(`tool_tiers: {memory: memory_write}` for Hermes).
+
 ## Content the agent read
 
 A web page the user asked for is still a page somebody else wrote. The results
