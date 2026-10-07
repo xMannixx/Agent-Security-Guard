@@ -159,6 +159,27 @@ including `test_availability.py`, passes unchanged.
   A plain URL, a search query and the browser tools stay free, also after a
   secret read; local tools (`search_files`, `session_search`) are not requests
   whatever their arguments contain.
+- **A confirmed skill patch is the patch that gets written.** The two-phase
+  gate (`propose` / `confirm`) compared the confirmed hash with the hash stored
+  in the pending object and then wrote the action stored next to it. Changing
+  that action after `propose` (its content, its target, or all of it) wrote
+  something the user never saw, under their confirmation. `confirm` now builds
+  the patch anew from the pending target and payload, hashes that, evaluates
+  that and hands that to the writer.
+  - The hash keeps the fields of an action apart and covers all of them. They
+    were joined with `|`, so target `a|b` with payload `c` had the hash of
+    target `a` with payload `b|c`, and lane, source and metadata were not
+    hashed at all. Audit records carry the new hash as well.
+  - A pending "patch" of another kind no longer reaches the writer on the
+    guard's allow for that kind (a `read_file` was allowed, and written).
+  - A denied proposal cannot be confirmed with a cleaner context afterwards.
+- **A self-modification can be confined to a directory.** `workspace_root` was
+  a field in the context that nothing read, and the gate wrote wherever the
+  target pointed. A self-modification whose target lies outside it is now
+  denied (`SELF_MODIFICATION_TARGET_OUTSIDE_WORKSPACE`), `..` segments and
+  `file:` URLs resolved, also for a file tool writing `SKILL.md`; `confirm`
+  checks again with symbolic links resolved right before the write. Without
+  `workspace_root` nothing is confined, as before; Hermes passes none.
 - **The memory bridge no longer trusts a source it has no entry for.** Only
   `tool`, `external` and `inference` counted as untrusted, so a preference
   "from `web`" was allowed. Anything but `observation` and `conversation` is

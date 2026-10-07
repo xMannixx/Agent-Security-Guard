@@ -166,14 +166,29 @@ def build_event(
         origin_trust=context.origin_trust.value if context else None,
         data_sensitivity=context.data_sensitivity.value if context else None,
         input_hash=input_hash,
-        action_hash=_action_hash(action) if action else None,
+        action_hash=action_hash(action) if action else None,
         chain_id=chain_id or (context.chain_id if context else None),
         message=decision.message,
     )
 
 
-def _action_hash(action: AgentAction) -> str:
-    raw = "|".join(
-        str(part) for part in (action.kind, action.method, action.target, action.payload)
-    )
+def action_hash(action: AgentAction) -> str:
+    """SHA-256 over every field of an action, each kept apart from the next.
+
+    A confirmation is bound to this hash, so two different actions must not
+    share one. The fields used to be joined with ``|``: target ``a|b`` with
+    payload ``c`` hashed like target ``a`` with payload ``b|c``, and ``None``
+    like the text ``None``. Lane, source and metadata were not hashed at all.
+    """
+    fields = [
+        action.kind, action.method, action.target, action.payload,
+        action.desired_memory_lane, action.memory_source, action.metadata,
+    ]
+    try:
+        raw = json.dumps(
+            fields, sort_keys=True, ensure_ascii=False, default=repr,
+            separators=(",", ":"),
+        )
+    except (TypeError, ValueError):  # keys that do not sort, or a cycle
+        raw = "".join(f"{len(text)}:{text}" for text in map(repr, fields))
     return hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()

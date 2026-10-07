@@ -76,6 +76,7 @@ pending = propose(
         origin_trust=OriginTrust.TRUSTED_USER,
         user_intent_origin=UserIntentOrigin.HUMAN_EXPLICIT,  # never from a doc/tool
         no_write_scope_active=user_set_no_write_scope,
+        workspace_root=skills_dir,                # the patch may only land in here
     ),
 )
 if pending.decision.decision is Decision.DENY:
@@ -95,14 +96,50 @@ result = confirm(
         user_intent_origin=UserIntentOrigin.HUMAN_CONFIRMATION,
         previous_action_was_explicitly_authorized=True,
         requested_action_from_nonuser_context=False,
+        workspace_root=skills_dir,
     ),
-    writer=lambda action: Path(action.target).write_text(action.payload, "utf-8"),
+    writer=lambda action: (Path(skills_dir) / action.target).write_text(action.payload, "utf-8"),
 )
 assert result.written is True   # only when the guard approved AND the hash matched
 ```
 
 Fail-closed by construction: a `require_confirmation` alone never writes; a
 `deny`, a guard error/unavailability, or an `action_hash` mismatch never writes.
+
+### What the confirmation is bound to
+
+`confirmed_action_hash` is the hash the **user** confirmed: take it from what
+you showed them, not from the pending object at the time of the call. `confirm`
+then:
+
+- builds the patch anew from the pending target and payload, and hashes
+  **that**. A pending patch whose content or target was changed after `propose`
+  no longer matches, and nothing is written. Up to 0.3.0 the confirmed hash was
+  compared with the hash stored in the pending object, which says nothing about
+  the action stored next to it;
+- hands the writer that rebuilt patch, a `self_improvement_patch` with the
+  target and the payload and nothing else. A kind or metadata added to the
+  pending action never reaches the writer, so write what `action.target` and
+  `action.payload` say and nothing more;
+- refuses a proposal that was denied. Only `require_confirmation` is an intent
+  a confirmation can refer to.
+
+The hash covers every field of an action and keeps the fields apart. It used to
+join kind, method, target and payload with `|`, so target `a|b` with payload
+`c` had the hash of target `a` with payload `b|c`.
+
+### Where a patch may land
+
+Set `workspace_root` in the context to the directory your skills live in. A
+self-modification whose target lies outside it is denied
+(`SELF_MODIFICATION_TARGET_OUTSIDE_WORKSPACE`): an absolute path elsewhere,
+`..` segments that climb out, a `file:` URL. A relative target is taken
+relative to the root. `confirm` checks once more right before the write with
+symbolic links resolved, so a link inside the root that points out of it does
+not pass. The same check applies to a file tool writing `SKILL.md` and to a
+patch body that names one. Without `workspace_root` the target is not confined;
+the plugin passes a `workspace_root` kwarg on if the host gives one, and Hermes
+gives none.
 
 ## Mapping host signals to `GuardContext`
 
@@ -132,6 +169,9 @@ Green in this repo (`tests/test_self_improvement_e2e.py`):
 - "ja, mach das" without a prior explicit patch order → `deny`,
   `reason_code=SHORT_CONFIRMATION_NO_PRIOR_AUTH`, no write.
 - Two-phase positive writes; hash mismatch and bare-yes confirm do not.
+- A pending patch changed after `propose` (content, target, the whole action)
+  is not written; a denied proposal cannot be confirmed; a patch outside
+  `workspace_root`, by name or through a link, is not written.
 
 Must be verified in the host: the live Hermes self-improvement pipeline actually
 calls this gate instead of writing `SKILL.md` directly. Until then, the bug is

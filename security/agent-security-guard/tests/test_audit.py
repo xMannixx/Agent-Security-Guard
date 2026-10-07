@@ -30,6 +30,12 @@ def test_build_event_from_decision():
     assert len(event.action_hash) == 64
 
 
+def test_audit_hash_tells_two_actions_apart():
+    one = build_event("tool_call", _decision(), action=AgentAction(kind="shell", target="a|b", payload="c"))
+    other = build_event("tool_call", _decision(), action=AgentAction(kind="shell", target="a", payload="b|c"))
+    assert one.action_hash != other.action_hash
+
+
 def test_sqlite_roundtrip(tmp_path):
     db = tmp_path / "audit.db"
     log = AuditLog(backend="sqlite", path=str(db))

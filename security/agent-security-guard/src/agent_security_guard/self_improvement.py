@@ -14,19 +14,28 @@ writing ``SKILL.md`` directly. It encodes the governance contract:
     3. ``no_write_scope_active`` is still False,
     4. ``requested_action_from_nonuser_context`` is False,
     5. the final guard check does not return ``deny``.
-- Fail-closed: any guard error / unavailability, a ``deny``, or an
-  ``action_hash`` mismatch results in NO write.
+- The hash is taken from what is about to be written, at the moment it is
+  written. ``confirm`` builds the patch anew from the pending target and
+  payload, hashes that, and hands that to the writer: a pending patch that was
+  changed after ``propose`` no longer matches the hash the user confirmed, and
+  nothing else in it reaches the writer.
+- With ``workspace_root`` in the context, the target has to lie inside it,
+  symbolic links resolved.
+- Fail-closed: any guard error / unavailability, a ``deny``, a proposal that
+  was denied, or an ``action_hash`` mismatch results in NO write.
 
 stdlib-only.
 """
 
 from __future__ import annotations
 
+import hmac
 from dataclasses import dataclass
 from typing import Callable, Optional
 
 from .adapter import GuardAdapter
-from .audit import _action_hash
+from .audit import action_hash
+from .policy import outside_workspace
 from .types import (
     AgentAction,
     Decision,
@@ -79,18 +88,14 @@ def propose(
     the host must echo back on confirmation.
     """
     action = build_patch_action(target, payload)
-    digest = _action_hash(action)
+    digest = ""
     try:
+        digest = action_hash(action)
         decision = adapter.guard_action(
             action, context, event_type=_SELF_IMPROVEMENT_EVENT
         )
     except Exception as exc:  # fail-closed: an un-evaluable intent is denied
-        decision = GuardDecision(
-            decision=Decision.DENY,
-            reason_code=ReasonCode.GUARD_UNAVAILABLE,
-            message=f"Self-improvement guard unavailable: {exc}",
-            risk_score=1.0,
-        )
+        decision = _unavailable(f"Self-improvement guard unavailable: {exc}")
     return PendingPatch(action=action, action_hash=digest, decision=decision)
 
 
@@ -110,56 +115,85 @@ def confirm(
     ``requested_action_from_nonuser_context=False``). The guard still has the
     final say; this gate only writes when it does not deny.
     """
-    # Condition 2: the confirmation must be bound to the exact proposed patch.
-    if not confirmed_action_hash or confirmed_action_hash != pending.action_hash:
+    # What will be written is built here, from the target and the payload and
+    # nothing else, and it is this that gets hashed, evaluated and written.
+    # ``pending`` is an object the host has been holding since ``propose``:
+    # comparing the hash stored in it with the confirmed one said nothing
+    # about the action next to it.
+    try:
+        action = build_patch_action(pending.action.target, pending.action.payload)
+        digest = action_hash(action)
+    except Exception as exc:
         return PatchResult(
-            decision=GuardDecision(
-                decision=Decision.DENY,
-                reason_code=ReasonCode.SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER,
-                message=(
-                    "Confirmation is not bound to the proposed patch "
-                    "(action_hash mismatch); no write."
-                ),
-            ),
+            decision=_unavailable(f"Pending patch cannot be read: {exc}"),
             written=False,
-            action_hash=pending.action_hash,
+            action_hash="",
         )
+
+    def refused(decision: GuardDecision) -> PatchResult:
+        return PatchResult(decision=decision, written=False, action_hash=digest)
+
+    # A denied proposal is not pending. Only ``require_confirmation`` is an
+    # intent a confirmation can refer to.
+    if pending.decision.decision is Decision.DENY:
+        return refused(pending.decision)
+
+    # Condition 2: the confirmation must be bound to the exact proposed patch,
+    # and the patch must still be the proposed one.
+    if not (
+        _same_hash(confirmed_action_hash, digest)
+        and _same_hash(pending.action_hash, digest)
+    ):
+        return refused(GuardDecision(
+            decision=Decision.DENY,
+            reason_code=ReasonCode.SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER,
+            message=(
+                "Confirmation is not bound to the patch that would be written "
+                "(action_hash mismatch); no write."
+            ),
+        ))
 
     # Conditions 1, 3, 4, 5: re-run the guard for this exact action. The
     # user-scope gates enforce no-write-scope and non-user provenance; the
     # self-modification rule enforces explicit/bound authorization.
     try:
         decision = adapter.guard_action(
-            pending.action, context, event_type=_SELF_IMPROVEMENT_EVENT
+            action, context, event_type=_SELF_IMPROVEMENT_EVENT
         )
     except Exception as exc:  # fail-closed
-        return PatchResult(
-            decision=GuardDecision(
-                decision=Decision.DENY,
-                reason_code=ReasonCode.GUARD_UNAVAILABLE,
-                message=f"Self-improvement guard unavailable: {exc}",
-                risk_score=1.0,
-            ),
-            written=False,
-            action_hash=pending.action_hash,
-        )
+        return refused(_unavailable(f"Self-improvement guard unavailable: {exc}"))
 
     if decision.decision is Decision.DENY:
-        return PatchResult(decision=decision, written=False, action_hash=pending.action_hash)
+        return refused(decision)
+
+    # The guard compared names. Right before the write a link inside the
+    # workspace that points out of it counts as well.
+    if outside_workspace(action.target, context.workspace_root, follow_links=True):
+        return refused(GuardDecision(
+            decision=Decision.DENY,
+            reason_code=ReasonCode.SELF_MODIFICATION_TARGET_OUTSIDE_WORKSPACE,
+            message="Patch target resolves to a path outside the workspace root; no write.",
+        ))
 
     # Approved and bound: perform the write via the host-provided writer.
     # A writer failure is fail-closed (reported as not written).
     try:
-        writer(pending.action)
+        writer(action)
     except Exception as exc:
-        return PatchResult(
-            decision=GuardDecision(
-                decision=Decision.DENY,
-                reason_code=ReasonCode.GUARD_UNAVAILABLE,
-                message=f"Writer failed; patch not applied: {exc}",
-                risk_score=1.0,
-            ),
-            written=False,
-            action_hash=pending.action_hash,
-        )
-    return PatchResult(decision=decision, written=True, action_hash=pending.action_hash)
+        return refused(_unavailable(f"Writer failed; patch not applied: {exc}"))
+    return PatchResult(decision=decision, written=True, action_hash=digest)
+
+
+def _same_hash(given: object, digest: str) -> bool:
+    if not isinstance(given, str) or not given:
+        return False
+    return hmac.compare_digest(given.encode("utf-8"), digest.encode("utf-8"))
+
+
+def _unavailable(message: str) -> GuardDecision:
+    return GuardDecision(
+        decision=Decision.DENY,
+        reason_code=ReasonCode.GUARD_UNAVAILABLE,
+        message=message,
+        risk_score=1.0,
+    )
