@@ -3,6 +3,13 @@
 # Every setting here is actually read by the policy engine. (Before 0.3.0
 # `mode` and `tiers` were decorative, so an over-blocking guard could not be
 # loosened without uninstalling it.)
+#
+# The plugin loads the first of these that exists:
+#   /etc/agent-security-guard/guard.yaml
+#   ~/.hermes/guard.yaml
+#   the copy shipped next to the plugin (this file)
+# It does NOT load a guard.yaml from the working directory. That is the agent's
+# workspace, and a policy file placed there could switch the guard off.
 
 # monitor         -> never blocks. Logs what it WOULD have blocked
 #                    (decision=allow_with_warning, advisory_decision=...).
@@ -14,14 +21,21 @@
 # strict          -> also stops and asks on unrecognized tool kinds.
 #
 # The env var AGENT_SECURITY_GUARD_MODE overrides this without editing files,
-# e.g. AGENT_SECURITY_GUARD_MODE=monitor to stop all blocking immediately.
+# e.g. AGENT_SECURITY_GUARD_MODE=monitor to stop all blocking. It is read once,
+# when the guard starts: set it and restart the host. Changing it inside a
+# running process has no effect.
 mode: autonomous-safe
 
-# What to do when the guard itself cannot run (import error, bad config).
-#   degrade  -> DEFAULT. Block only kinds that are dangerous by name; let
-#               ordinary host operations through, flagged as degraded.
+# What to do when the guard itself cannot evaluate a call (broken install, a
+# bug in the engine).
+#   degrade  -> DEFAULT. Reads and unrecognized host tools keep working,
+#               flagged as degraded. State-changing kinds (external write,
+#               memory write, config change, ...) and kinds dangerous by name
+#               are blocked until the guard works again.
 #   deny_all -> Block everything. Safest, but a broken install takes the
-#               host down completely.
+#               host down completely. The natural partner of `mode: strict`.
+# A guard.yaml that cannot be parsed is a different case: the engine keeps
+# evaluating on the built-in defaults and its decisions carry `config_error`.
 on_error: degrade
 
 # Infer "no-write scope" / "ambiguous confirmation" from raw user wording.

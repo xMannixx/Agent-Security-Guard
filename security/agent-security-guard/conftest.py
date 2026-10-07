@@ -3,6 +3,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 _SRC = Path(__file__).parent / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
@@ -11,3 +13,19 @@ if str(_SRC) not in sys.path:
 _REPO_ROOT = Path(__file__).parent.parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+
+
+@pytest.fixture
+def isolated_plugin(monkeypatch, tmp_path):
+    """The plugin with fresh state, an empty working directory, and no operator
+    policy other than the guard.yaml shipped next to it."""
+    import plugin as guard_plugin
+
+    monkeypatch.setattr(guard_plugin, "_adapter", None)
+    monkeypatch.setattr(guard_plugin, "_config", None)
+    monkeypatch.setattr(guard_plugin, "_config_error", None)
+    monkeypatch.setattr(guard_plugin, "_SYSTEM_CONFIG", tmp_path / "etc" / "guard.yaml")
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "home"))
+    monkeypatch.delenv("AGENT_SECURITY_GUARD_MODE", raising=False)
+    monkeypatch.chdir(tmp_path)
+    return guard_plugin

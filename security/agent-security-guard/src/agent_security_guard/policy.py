@@ -17,7 +17,7 @@ import os
 from typing import Any, Dict, List, Optional
 
 from . import _miniyaml
-from .modes import MODE_STRICT, effective_mode
+from .modes import MODE_STRICT, effective_mode, normalize_mode
 from .types import (
     ActionTier,
     AgentAction,
@@ -229,8 +229,15 @@ def _untrusted(context: GuardContext) -> bool:
 
 
 def resolve_mode(context: GuardContext) -> str:
-    """The mode in force for this evaluation (env override > config > context)."""
+    """The mode in force for this evaluation (env override > config > context).
+
+    A context that went through ``GuardAdapter`` already carries the mode the
+    session fixed at creation (``mode_resolved``); the environment is not read
+    again for it, so a later env change cannot loosen a running session.
+    """
     configured = context.mode or (context.config.mode if context.config else None)
+    if context.mode_resolved:
+        return normalize_mode(configured)
     return effective_mode(configured)
 
 

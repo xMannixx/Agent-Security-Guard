@@ -49,15 +49,17 @@ knowledge).
 - `monitor` — never blocks. Reports what a blocking mode *would* have done in
   `advisory_decision`. Use this when introducing the guard into a live host, and
   as the panic switch. `AGENT_SECURITY_GUARD_MODE=monitor` overrides everything
-  without editing files.
+  without editing files; it is read once at startup, so set it and restart.
 - `autonomous-safe` (default) — blocks only the narrow, unambiguous danger set.
   Tool kinds the guard does not recognize are allowed and audited, because an
   unrecognized *name* is not evidence of danger.
 - `strict` — also stops and asks on unrecognized tool kinds.
 
-If the guard itself cannot run, it degrades (blocks only kinds dangerous by
-name) rather than denying everything; `on_error: deny_all` restores hard
-fail-closed.
+If the guard itself cannot evaluate a call, it degrades rather than denying
+everything: reads and unrecognized host tools keep working, state-changing and
+dangerous kinds are blocked; `on_error: deny_all` blocks everything. The plugin
+reads `guard.yaml` from `/etc/agent-security-guard/`, `~/.hermes/`, or its own
+install directory, never from the working directory.
 
 ## Status
 

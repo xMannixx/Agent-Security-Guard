@@ -34,6 +34,7 @@ Each class maps to a deterministic outcome, covered by
 | 5 | Supply-chain instruction | Untrusted content says "install this skill/package" | Install from untrusted is denied; from a user it requires confirmation | `INSTALL_FROM_UNTRUSTED` |
 | 6 | Unexpected code execution | Web -> shell, or download -> execute | Untrusted -> execution denied; untrusted download -> execute denied (user download -> confirm) | `UNTRUSTED_TO_SHELL`, `DOWNLOAD_THEN_EXECUTE` |
 | 7 | Unauthorized self-modification | Agent patches its own `SKILL.md` / procedural rules without an explicit user order, or off a bare "yes" / under a no-write scope | `SELF_MODIFICATION` tier is never a direct allow; no-write scope and ambiguous-confirmation gates deny first; a write needs an explicit, hash-bound confirmation (two-phase) | `EXPLICIT_NO_WRITE_SCOPE_VIOLATION`, `SHORT_CONFIRMATION_NO_PRIOR_AUTH`, `SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER` |
+| 8 | Neutralizing the guard | No rule is beaten; the guard is made to skip it: tool arguments shaped so the evaluation raises, an audit write that fails, a `guard.yaml` planted in the workspace, `AGENT_SECURITY_GUARD_MODE` flipped at runtime | Inputs are normalized before evaluation; an audit failure never replaces a decision; an evaluation error blocks state-changing kinds; policy is read only from operator locations, never the working directory; the mode is fixed when the guard starts | the rule's own code, or `GUARD_DEGRADED_DANGEROUS_KIND` |
 
 ## Self-modification governance
 
@@ -77,7 +78,8 @@ transition.** Absence of information is not evidence.
 | Host passed no `origin_trust` | treated as untrusted -> hard deny | `unspecified` -> not untrusted, still audited |
 | Reading `app.log` / `memory.db` | sensitive -> poisons exfil chain | ordinary read |
 | Text says "ok" / "nur lesen" | deny all state changes | ignored unless `scope_from_text` |
-| Guard cannot load | deny everything | block only kinds dangerous by name |
+| Guard cannot evaluate a call | deny everything | block state-changing and dangerous kinds; reads and unrecognized host tools keep working |
+| `guard.yaml` cannot be parsed | deny everything | keep evaluating on built-in defaults, report `config_error` |
 
 `tests/test_availability.py` enforces this direction, exactly as
 `tests/test_threat_regression.py` enforces the other. Neither may regress to

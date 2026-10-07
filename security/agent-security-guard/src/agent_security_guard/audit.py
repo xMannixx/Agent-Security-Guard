@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -64,19 +65,24 @@ class AuditLog:
         self.path = path or audit_cfg.get("path") or "guard-audit.db"
         self.jsonl_path = jsonl_path or audit_cfg.get("jsonl_path") or "guard-audit.jsonl"
         self._conn: Optional[sqlite3.Connection] = None
+        # Hosts evaluate tool calls from worker threads. The lock serializes
+        # every use of the connection, so it need not stay on the thread that
+        # opened it (sqlite3 otherwise raises on the first call from another).
+        self._lock = threading.Lock()
         if self.backend in ("sqlite", "both"):
             self._init_sqlite()
 
     def _init_sqlite(self) -> None:
-        self._conn = sqlite3.connect(self.path)
+        self._conn = sqlite3.connect(self.path, check_same_thread=False)
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
 
     def record(self, event: GuardEvent) -> None:
-        if self.backend in ("sqlite", "both"):
-            self._record_sqlite(event)
-        if self.backend in ("jsonl", "both"):
-            self._record_jsonl(event)
+        with self._lock:
+            if self.backend in ("sqlite", "both"):
+                self._record_sqlite(event)
+            if self.backend in ("jsonl", "both"):
+                self._record_jsonl(event)
 
     def _record_sqlite(self, event: GuardEvent) -> None:
         if self._conn is None:
@@ -96,9 +102,10 @@ class AuditLog:
 
     def last(self, n: int = 50) -> List[Dict[str, Any]]:
         """Return the most recent ``n`` events, newest first."""
-        if self.backend in ("sqlite", "both"):
-            return self._last_sqlite(n)
-        return self._last_jsonl(n)
+        with self._lock:
+            if self.backend in ("sqlite", "both"):
+                return self._last_sqlite(n)
+            return self._last_jsonl(n)
 
     def _last_sqlite(self, n: int) -> List[Dict[str, Any]]:
         if self._conn is None:
@@ -120,9 +127,10 @@ class AuditLog:
         return records
 
     def close(self) -> None:
-        if self._conn is not None:
-            self._conn.close()
-            self._conn = None
+        with self._lock:
+            if self._conn is not None:
+                self._conn.close()
+                self._conn = None
 
 
 def record_event(event: GuardEvent, config: Optional[GuardConfig] = None) -> None:

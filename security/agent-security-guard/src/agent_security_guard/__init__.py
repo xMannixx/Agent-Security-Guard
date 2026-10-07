@@ -7,7 +7,7 @@ classification, the hard-rule matrix, and the type system.
 from __future__ import annotations
 
 from .action_guard import check_action
-from .actions import classify_action
+from .actions import classify_action, normalize_action
 from .adapter import GuardAdapter
 from .audit import AuditLog, build_event, record_event
 from .envelope import resolve_origin_trust
@@ -21,6 +21,7 @@ from .modes import (
     apply_mode,
     effective_mode,
     is_blocking,
+    mode_with_source,
     normalize_mode,
 )
 from .sequence_guard import (
@@ -77,6 +78,7 @@ __all__ = [
     # engine
     "check_action",
     "classify_action",
+    "normalize_action",
     "decide_action",
     "load_config",
     "domain_allowed",
@@ -89,6 +91,7 @@ __all__ = [
     # operating modes
     "apply_mode",
     "effective_mode",
+    "mode_with_source",
     "normalize_mode",
     "is_blocking",
     "KNOWN_MODES",

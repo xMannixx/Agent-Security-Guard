@@ -14,13 +14,14 @@ and keeps a bounded action history plus an optional audit sink.
 from __future__ import annotations
 
 import dataclasses
+import logging
 from typing import Any, Dict, Optional, Tuple
 
 from .action_guard import check_action
-from .actions import classify_action
+from .actions import classify_action, normalize_action
 from .audit import AuditLog, build_event
 from .memory_bridge import advise_memory_write
-from .modes import apply_mode, effective_mode
+from .modes import MODE_SOURCE_ENV, apply_mode, mode_with_source
 from .policy import load_config, path_is_sensitive
 from .scanner import classify_content, scan_input
 from .sequence_guard import DEFAULT_CHAIN_WINDOW, ActionHistory, check_sequence
@@ -36,6 +37,8 @@ from .types import (
 )
 from .wrapper import wrap_untrusted
 
+logger = logging.getLogger(__name__)
+
 
 class GuardAdapter:
     """Per-session guard facade. Enforcement vs advisory is the host's call;
@@ -48,6 +51,9 @@ class GuardAdapter:
         audit: Optional[AuditLog] = None,
     ):
         self.config = config or load_config()
+        # Fixed here, once. Any code in the process can change the environment
+        # later, and that must not switch a running guard to monitor.
+        self._mode, self._mode_source = mode_with_source(self.config.mode)
         max_events = int(self.config.limits.get("max_history_events", 50))
         chain_window = int(
             self.config.limits.get("chain_window", DEFAULT_CHAIN_WINDOW)
@@ -58,11 +64,17 @@ class GuardAdapter:
             else ActionHistory(max_events, chain_window=chain_window)
         )
         self.audit = audit
+        self.audit_failures = 0
 
     @property
     def mode(self) -> str:
-        """The mode actually in force (env override wins over config)."""
-        return effective_mode(self.config.mode)
+        """The mode in force (env override wins over config), fixed at creation."""
+        return self._mode
+
+    @property
+    def mode_source(self) -> str:
+        """``"env"`` if AGENT_SECURITY_GUARD_MODE decided the mode, else ``"config"``."""
+        return self._mode_source
 
     def guard_input(
         self,
@@ -93,6 +105,7 @@ class GuardAdapter:
         ``"self_improvement"`` for skill-patch gating) without changing the
         decision logic.
         """
+        action = normalize_action(action)
         context = self._apply_session_policy(context)
         context = self._enrich_sensitivity(action, context)
         tier = classify_action(action)
@@ -103,21 +116,40 @@ class GuardAdapter:
         self.history.record_action(action, context, final.decision)
 
         if self.audit is not None and (final.audit_required or final.decision is not Decision.ALLOW):
+            self._record_audit(event_type, final, action, tier, context)
+        return final
+
+    def _record_audit(self, event_type, final, action, tier, context) -> None:
+        """Write the audit record; a failed write never changes the decision.
+
+        Audit is observability. Letting the exception escape made the caller
+        treat the action as "could not be evaluated", which threw away a denial
+        that had already been reached.
+        """
+        try:
             self.audit.record(
                 build_event(event_type, final, action=action, tier=tier, context=context)
             )
-        return final
+        except Exception as exc:
+            self.audit_failures += 1
+            logger.warning("audit write failed; decision stands: %s", exc)
 
     def _apply_session_policy(self, context: GuardContext) -> GuardContext:
-        """Make the adapter's config authoritative for a caller that omitted it.
+        """Bind the context to this session's config and fixed mode.
 
-        Without this, a host configuring ``mode: monitor`` still got strict
+        A caller that omitted ``config`` gets the adapter's config and mode:
+        without this, a host configuring ``mode: monitor`` still got strict
         decisions whenever it passed a plain ``GuardContext`` (whose ``mode``
-        field carries the dataclass default, not the operator's setting).
+        field carries the dataclass default, not the operator's setting). A
+        caller that brought its own config keeps its own mode, unless the env
+        override decided the session mode, which outranks both.
         """
-        if context.config is not None:
-            return context
-        return dataclasses.replace(context, config=self.config, mode=self.mode)
+        if context.config is None:
+            return dataclasses.replace(
+                context, config=self.config, mode=self.mode, mode_resolved=True
+            )
+        mode = self.mode if self._mode_source == MODE_SOURCE_ENV else context.mode
+        return dataclasses.replace(context, mode=mode, mode_resolved=True)
 
     def _enrich_sensitivity(
         self, action: AgentAction, context: GuardContext

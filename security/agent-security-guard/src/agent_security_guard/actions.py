@@ -8,7 +8,9 @@ new, unmapped action fails safe rather than slipping through as read-only.
 
 from __future__ import annotations
 
-from typing import Optional
+import dataclasses
+import json
+from typing import Any, Optional
 
 from .types import ActionTier, AgentAction
 
@@ -95,6 +97,45 @@ def classify_action(action: AgentAction) -> ActionTier:
         return ActionTier.READ_ONLY
 
     return ActionTier.UNKNOWN
+
+
+def normalize_action(action: AgentAction) -> AgentAction:
+    """Coerce host-supplied fields to the types the policy code assumes.
+
+    Hosts forward tool arguments as they come: a JSON-object ``payload``, a
+    numeric ``target``, ``metadata`` that is not a mapping. The policy calls
+    string methods on these, so an unexpected type used to raise in the middle
+    of an evaluation, and an evaluation that raises is not a denial. Returns a
+    copy; the caller's object is left untouched.
+    """
+    return dataclasses.replace(
+        action,
+        kind=_text(action.kind),
+        target=_text(action.target),
+        method=_optional_text(action.method),
+        payload=_optional_text(action.payload),
+        desired_memory_lane=_optional_text(action.desired_memory_lane),
+        memory_source=_optional_text(action.memory_source),
+        metadata=action.metadata if isinstance(action.metadata, dict) else {},
+    )
+
+
+def _optional_text(value: Any) -> Optional[str]:
+    return None if value is None else _text(value)
+
+
+def _text(value: Any) -> str:
+    """Render a value as scannable text (structured values as JSON)."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (bytes, bytearray)):
+        return bytes(value).decode("utf-8", errors="replace")
+    try:
+        return json.dumps(value, ensure_ascii=False, default=str)
+    except Exception:  # circular or otherwise unserializable
+        return str(value)
 
 
 def _classify_http(action: AgentAction) -> ActionTier:
