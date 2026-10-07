@@ -119,10 +119,27 @@ The plugin in [`plugin/__init__.py`](../plugin/__init__.py) exposes
 - `pre_tool_call` → evaluates the planned action (single-action policy +
   kill-chain sequence policy) and returns a machine-readable decision.
 
-Both hooks are **fail-closed**: if the guard cannot load or raises, the tool
-hook returns an explicit `deny` (`reason_code=GUARD_UNAVAILABLE`, `block=True`)
-and the input hook substitutes a degraded-but-safe wrapper instead of passing
-raw untrusted content through.
+Neither hook lets a failure of the guard pass as approval. If the guard cannot
+load or raises, the tool hook blocks state-changing and dangerous kinds
+(`reason_code=GUARD_DEGRADED_DANGEROUS_KIND`, `block=True`) and lets reads
+through flagged `degraded`; with `on_error: deny_all` it blocks everything
+(`GUARD_UNAVAILABLE`). The input hook substitutes a degraded-but-safe wrapper
+instead of passing raw untrusted content through.
+
+### Where the plugin reads its policy
+
+The plugin loads the first `guard.yaml` it finds in:
+
+1. `/etc/agent-security-guard/guard.yaml`
+2. `~/.hermes/guard.yaml`
+3. the directory the plugin was installed from
+
+It does not load a `guard.yaml` from the working directory. That is the agent's
+workspace: a cloned repository, or the agent itself, could put a file there
+that sets `mode: monitor`. If you kept your policy there, move it; the plugin
+logs a warning while such a file is being ignored. For the same reason, prefer
+the `/etc` location, owned by root, when the agent runs under your own user: a
+file in your home directory is one the agent can rewrite.
 
 The decision payload your host should enforce:
 

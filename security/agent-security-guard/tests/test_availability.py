@@ -263,6 +263,20 @@ def test_monitor_mode_via_env_var(monkeypatch):
     assert decision.decision is Decision.ALLOW_WITH_WARNING
 
 
+def test_env_kill_switch_set_before_startup_still_works(monkeypatch):
+    # The override is read once, when the adapter is created; that is the
+    # supported way to use it (set it, restart the host).
+    monkeypatch.setenv("AGENT_SECURITY_GUARD_MODE", "off")
+    adapter = GuardAdapter()
+    assert adapter.mode == MODE_MONITOR
+    assert adapter.mode_source == "env"
+    decision = adapter.guard_action(
+        AgentAction(kind="shell", target="x"),
+        GuardContext(origin_trust=OriginTrust.EXTERNAL_WEB),
+    )
+    assert decision.decision is Decision.ALLOW_WITH_WARNING
+
+
 def test_unrecognized_mode_falls_back_to_default_not_to_extremes():
     assert normalize_mode("nonsense-mode") == "autonomous-safe"
     assert normalize_mode(None) == "autonomous-safe"
@@ -338,3 +352,46 @@ def test_unwritable_audit_sink_does_not_disable_the_guard(monkeypatch, tmp_path)
     assert adapter is not None
     assert adapter.audit is None
     monkeypatch.setattr(guard_plugin, "_adapter", None, raising=False)
+
+
+def test_broken_policy_file_is_not_an_outage(isolated_plugin, monkeypatch, tmp_path):
+    # An unusable guard.yaml must not block ordinary work: the engine keeps
+    # evaluating on the built-in defaults instead of refusing or giving up.
+    broken = tmp_path / "broken.yaml"
+    broken.write_text("\tbroken\n", encoding="utf-8")
+    monkeypatch.setattr(isolated_plugin, "_config_path", lambda: str(broken))
+    read = isolated_plugin.guard_tool_call(action={"kind": "read_file", "target": "a.txt"})
+    assert read["allowed"] is True
+    write = isolated_plugin.guard_tool_call(
+        action={"kind": "http_post", "target": "https://api.example.com/x"},
+        origin_trust="trusted_user",
+    )
+    assert write["reason_code"] == "EXTERNAL_WRITE_REQUIRES_CONFIRMATION"
+
+
+def test_structured_payload_is_ordinary_work(isolated_plugin):
+    # A JSON-object body must be evaluated like any other, not treated as a
+    # guard failure.
+    payload = isolated_plugin.guard_tool_call(
+        tool_name="http_post",
+        args={"url": "https://api.example.com/x", "payload": {"title": "weekly report"}},
+        origin_trust="trusted_user",
+    )
+    assert payload["reason_code"] == "EXTERNAL_WRITE_REQUIRES_CONFIRMATION"
+    assert "degraded" not in payload
+
+
+def test_monitor_mode_does_not_block_even_when_the_engine_raises(monkeypatch):
+    # monitor is the panic switch; it has to hold when the guard itself is the
+    # thing that is misbehaving.
+    class _Raises:
+        config = load_config(None)
+        mode = MODE_MONITOR
+
+        def guard_action(self, *args, **kwargs):
+            raise RuntimeError("evaluation bug")
+
+    monkeypatch.setattr(guard_plugin, "_get_adapter", lambda: _Raises())
+    payload = guard_plugin.guard_tool_call(action={"kind": "shell", "target": "x"})
+    assert payload["allowed"] is True
+    assert payload["degraded"] is True

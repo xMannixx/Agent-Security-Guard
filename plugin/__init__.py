@@ -18,6 +18,7 @@ Host contract (kwargs are best-effort; unknown shapes are ignored):
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
 from pathlib import Path
@@ -44,24 +45,38 @@ try:
         GuardAdapter,
         OriginTrust,
         UserIntentOrigin,
+        classify_action,
         detect_no_write_scope,
-        effective_mode,
         is_short_confirmation,
+        is_state_changing,
         load_config,
+        normalize_action,
     )
 except Exception as exc:  # pragma: no cover - exercised only on broken installs
     logger.warning("agent-security-guard import failed: %s", exc)
     _IMPORT_ERROR = str(exc)
     GuardAdapter = None  # type: ignore
+    # Stand-in so the hook can still describe the call and reach the degraded
+    # decision; without it _extract_action raised NameError instead.
+    from types import SimpleNamespace as AgentAction  # type: ignore
 
 
 _adapter = None
+_config = None
+_config_error: Optional[str] = None
+
+_SYSTEM_CONFIG = Path("/etc/agent-security-guard/guard.yaml")
 
 
 def _config_path() -> Optional[str]:
-    """First guard.yaml found in the standard locations, else None (defaults)."""
+    """First guard.yaml found in the operator's locations, else None (defaults).
+
+    The working directory is deliberately not searched. It is the agent's
+    workspace: a cloned repository, or the agent itself, could place a
+    guard.yaml there and switch the guard off with ``mode: monitor``.
+    """
     for candidate in (
-        Path.cwd() / "guard.yaml",
+        _SYSTEM_CONFIG,
         Path.home() / ".hermes" / "guard.yaml",
         Path(__file__).resolve().parent.parent / "guard.yaml",
     ):
@@ -70,28 +85,60 @@ def _config_path() -> Optional[str]:
     return None
 
 
+def _warn_if_workspace_config_ignored(chosen: Optional[str]) -> None:
+    """Say so when a guard.yaml in the working directory is not being used.
+
+    Up to 0.3.0 that file was loaded first, so an operator may still keep the
+    policy there; dropping it without a word would quietly change their setup.
+    """
+    try:
+        stray = Path.cwd() / "guard.yaml"
+        if stray.is_file() and not (chosen and stray.samefile(chosen)):
+            logger.warning(
+                "%s is ignored: the policy is not read from the working "
+                "directory. Move it to %s or ~/.hermes/guard.yaml.",
+                stray, _SYSTEM_CONFIG,
+            )
+    except OSError:
+        pass
+
+
 def _get_adapter():
-    global _adapter
+    global _adapter, _config, _config_error
     if GuardAdapter is None:
         return None
     if _adapter is None:
+        path = None
         try:
-            config = load_config(_config_path())
+            path = _config_path()
+            _warn_if_workspace_config_ignored(path)
+            _config = load_config(path)
+            _config_error = None
         except Exception as exc:
-            logger.warning("guard.yaml invalid: %s", exc)
-            return None
+            # An unusable policy file must neither take the host down (0.2.x)
+            # nor leave it unguarded (0.3.0 skipped evaluation entirely): keep
+            # evaluating on the built-in defaults and report the error.
+            _config_error = f"{path}: {exc}"
+            logger.error(
+                "guard.yaml unusable (%s); enforcing built-in defaults", _config_error
+            )
+            _config = load_config(None)
         # An unwritable audit sink must not cost the host its guard: audit is
         # observability, not enforcement, so run without it if it cannot open.
         audit = None
         try:
-            audit = AuditLog(config=config)
+            audit = AuditLog(config=_config)
         except Exception as exc:
             logger.warning("audit log unavailable; continuing without it: %s", exc)
         try:
-            _adapter = GuardAdapter(config=config, audit=audit)
+            _adapter = GuardAdapter(config=_config, audit=audit)
         except Exception as exc:
             logger.warning("GuardAdapter init failed: %s", exc)
             return None
+        if _adapter.mode_source == "env":
+            logger.warning(
+                "mode '%s' forced by AGENT_SECURITY_GUARD_MODE", _adapter.mode
+            )
     return _adapter
 
 
@@ -137,27 +184,36 @@ def guard_tool_call(**kwargs) -> Optional[Dict[str, Any]]:
     """Evaluate a planned tool call; return a decision dict for the host.
 
     When the guard cannot evaluate the action (import/init failure or a runtime
-    exception) it degrades instead of denying everything: only kinds that are
-    dangerous by name are blocked, the rest are allowed and flagged. A guard
-    that takes the whole host down when its own audit file is unwritable is not
-    a security control, it is an outage. Set ``on_error: deny_all`` in
-    guard.yaml for the strict (0.2.x) behaviour.
+    exception) it degrades instead of denying everything: reads and
+    unrecognized host tools keep working, flagged, while state-changing and
+    dangerous kinds are blocked. A guard that takes the whole host down when
+    its own audit file is unwritable is not a security control, it is an
+    outage; one that waves a write through because evaluating it raised is not
+    one either. Set ``on_error: deny_all`` in guard.yaml to block everything.
     """
     action = _extract_action(kwargs)
     if action is None:
         return None
     adapter = _get_adapter()
     if adapter is None:
-        return _degraded_payload(action, _IMPORT_ERROR or "guard adapter unavailable")
-    context = _extract_context(kwargs, adapter.config)
+        return _degraded_payload(
+            action, _IMPORT_ERROR or "guard adapter unavailable", config=_config
+        )
     try:
+        context = _extract_context(kwargs, adapter)
         decision = adapter.guard_action(action, context)
     except Exception as exc:
         logger.warning("guard_action failed; degrading: %s", exc)
         return _degraded_payload(
-            action, f"guard evaluation error: {exc}", config=adapter.config
+            action,
+            f"guard evaluation error: {exc}",
+            config=adapter.config,
+            mode=getattr(adapter, "mode", None),
         )
-    return _enforcement_payload(decision)
+    payload = _enforcement_payload(decision)
+    if _config_error:
+        payload["config_error"] = _config_error
+    return payload
 
 
 def _enforcement_payload(decision) -> Dict[str, Any]:
@@ -207,23 +263,55 @@ def _is_dangerous_by_name(kind: str) -> bool:
     return any(token in lowered for token in _DANGEROUS_KIND_TOKENS)
 
 
-def _degraded_payload(action, message: str, config=None) -> Dict[str, Any]:
+# The engine's other state-changing kinds, by exact name. With the package
+# importable the tier decides; this covers a broken install, where the name is
+# all there is. tests/test_plugin.py keeps it in step with the kind table.
+_STATE_CHANGING_KIND_NAMES = frozenset({
+    "run", "http_post", "http_put", "http_patch", "http_delete", "api_post",
+    "external_write", "download", "fetch_file", "wget", "memory_write",
+    "remember", "config_change", "profile_change", "settings_write",
+})
+
+
+def _blocked_while_degraded(action) -> bool:
+    """Whether an action the engine could not evaluate is held back.
+
+    Held back: kinds dangerous by name and everything state-changing. Those are
+    what the engine can deny, so letting them through unevaluated made any
+    error a caller could provoke a way around the denial. Reads and
+    unrecognized host tools pass.
+    """
+    kind = str(getattr(action, "kind", "") or "").strip().lower()
+    if _is_dangerous_by_name(kind) or kind in _STATE_CHANGING_KIND_NAMES:
+        return True
+    if GuardAdapter is None:
+        return False
+    try:
+        # What a name cannot tell: a generic request carrying a write method.
+        return is_state_changing(classify_action(normalize_action(action)))
+    except Exception:
+        return True
+
+
+def _degraded_payload(action, message: str, config=None, mode=None) -> Dict[str, Any]:
     """Decision used when the policy engine itself could not run.
 
-    ``on_error: deny_all`` restores hard fail-closed. The default blocks only
-    kinds that read as dangerous by name and lets ordinary host operations
-    (reads, listings, dashboards) continue, loudly flagged as ``degraded``.
+    ``on_error: deny_all`` restores hard fail-closed. The default keeps reads
+    and unrecognized host tools (listings, dashboards) working, loudly flagged
+    as ``degraded``, and blocks dangerous and state-changing kinds. ``monitor``
+    mode never blocks, here as everywhere else.
     """
     on_error = str(getattr(config, "on_error", "degrade") or "degrade").lower()
     kind = getattr(action, "kind", "") or ""
-    if on_error == "deny_all":
+    blocking = mode != "monitor"
+    if blocking and on_error == "deny_all":
         return _fail_closed_payload(message)
-    if _is_dangerous_by_name(kind):
+    if blocking and _blocked_while_degraded(action):
         payload = _fail_closed_payload(message)
         payload["reason_code"] = "GUARD_DEGRADED_DANGEROUS_KIND"
         payload["message"] = (
-            f"{message}; '{kind}' is dangerous by name and is blocked while the "
-            "guard is unavailable."
+            f"{message}; '{kind}' is dangerous by name or changes state and is "
+            "blocked while the guard is unavailable."
         )
         return payload
     return {
@@ -288,21 +376,37 @@ def _extract_action(kwargs: Dict[str, Any]):
         )
     tool_name = kwargs.get("tool_name") or kwargs.get("tool")
     if tool_name:
-        args = kwargs.get("args") or kwargs.get("arguments") or {}
+        args = _tool_args(kwargs)
         return AgentAction(
             kind=str(tool_name),
             target=str(args.get("target") or args.get("url") or args.get("path") or ""),
             method=args.get("method"),
             payload=args.get("payload"),
-            metadata=args if isinstance(args, dict) else {},
+            metadata=args,
         )
     return None
 
 
-def _extract_context(kwargs: Dict[str, Any], config) -> GuardContext:
+def _tool_args(kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    """Tool arguments as a mapping.
+
+    A host that relays the model's tool call verbatim passes them as a JSON
+    string; anything else that is not a mapping carries nothing usable.
+    """
+    args = kwargs.get("args") or kwargs.get("arguments") or {}
+    if isinstance(args, str):
+        try:
+            args = json.loads(args)
+        except Exception:  # malformed, or nested deeply enough to hit the recursion limit
+            args = {}
+    return args if isinstance(args, dict) else {}
+
+
+def _extract_context(kwargs: Dict[str, Any], adapter) -> GuardContext:
+    config = adapter.config
     no_write, short_conf = _scope_flags(kwargs, config)
     return GuardContext(
-        mode=effective_mode(config.mode),
+        mode=adapter.mode,
         # A host that states no provenance gets UNSPECIFIED, not UNKNOWN.
         # UNKNOWN counts as untrusted, which denied the host's own shell,
         # install, and config operations for simply not passing a kwarg.
@@ -366,4 +470,8 @@ def guard_status() -> Dict[str, Any]:
     return {
         "available": GuardAdapter is not None,
         "error": _IMPORT_ERROR,
+        "config_error": _config_error,
+        # None until the first hook call has created the adapter.
+        "mode": getattr(_adapter, "mode", None),
+        "mode_source": getattr(_adapter, "mode_source", None),
     }

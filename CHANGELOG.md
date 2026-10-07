@@ -4,6 +4,58 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+Closes two ways of getting past the guard without beating any rule, found in a
+security review of 0.3.0. Ordinary work is unaffected: every existing test,
+including `test_availability.py`, passes unchanged.
+
+### Security
+
+- **An evaluation that raises is no longer a way around a denial.** A
+  JSON-object `payload`, a non-string `target`, or `metadata` that is not a
+  mapping made the evaluation raise, and the error path then allowed the call
+  (`GUARD_DEGRADED_ALLOWED`): an `http_post` carrying a secret was denied as a
+  string and allowed as a dict. Fields are now normalized before evaluation,
+  and tool arguments passed as a JSON string are parsed.
+- **A failed audit write no longer discards the decision.** The SQLite
+  connection was bound to the thread that opened it, so in a host calling from
+  worker threads every audited decision raised after it was made, turning
+  `deny` into `allow`. The audit log is now usable from any thread, and a
+  failed write is logged and counted (`GuardAdapter.audit_failures`) instead of
+  replacing the decision.
+- **Policy is no longer read from the working directory.** `guard.yaml` in the
+  agent's workspace was loaded first, so a cloned repository (or the agent
+  itself) could set `mode: monitor`, and a deliberately broken file dropped the
+  guard into its error path. The plugin now reads
+  `/etc/agent-security-guard/guard.yaml`, `~/.hermes/guard.yaml`, or the copy
+  shipped next to it, and logs a warning while a working-directory file is
+  being ignored.
+- **`AGENT_SECURITY_GUARD_MODE` is read once, at startup.** It was read on
+  every evaluation, so any code in the process could switch a running guard to
+  `monitor`. Set it and restart the host.
+
+### Changed
+
+- **`on_error: degrade` now also blocks state-changing kinds** (external
+  write, memory write, config change, download, ...) while the engine cannot
+  evaluate, not only kinds dangerous by name. Reads and unrecognized host tools
+  keep working, as before. `monitor` mode never blocks, in the error path too.
+- **A `guard.yaml` that cannot be parsed no longer disables evaluation.** The
+  engine keeps running on the built-in defaults and its decisions carry
+  `config_error`. `on_error` from a config that did load is honored when the
+  adapter cannot be built.
+- A broken install (package not importable) now reaches the degraded decision
+  instead of raising `NameError` from the hook.
+
+### Added
+
+- `guard_status()` reports `config_error`, `mode`, and `mode_source`.
+- `normalize_action`, `mode_with_source`, `GuardAdapter.mode_source`,
+  `GuardContext.mode_resolved`.
+- 21 tests: threat class 8 ("neutralizing the guard") in
+  `test_threat_regression.py`, and the matching availability checks.
+
 ## [0.3.0] - 2026-08-30
 
 **Fixes a critical over-blocking regression.** In a live host, 0.2.x denied

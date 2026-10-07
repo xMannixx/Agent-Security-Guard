@@ -61,15 +61,23 @@ provenance (its own internal tool call) and is **not** treated as untrusted;
 | `autonomous-safe` (default) | Blocks only the narrow, unambiguous danger set. Unrecognized tool kinds are allowed and audited. |
 | `strict` | Also stops and asks on unrecognized tool kinds. |
 
-To stop all blocking immediately, without editing any file:
+To stop all blocking without editing any file, set this and restart the host:
 
 ```bash
 export AGENT_SECURITY_GUARD_MODE=monitor
 ```
 
-If the guard itself cannot run (bad config, unwritable audit file) it degrades —
-blocking only kinds that are dangerous by name — instead of denying every call.
-Set `on_error: deny_all` for hard fail-closed.
+The variable is read once, when the guard starts. Changing it inside a running
+process has no effect, so code the agent runs cannot use it to switch the guard
+off.
+
+If the guard itself cannot evaluate a call (broken install, a bug in the
+engine) it degrades instead of denying every call: reads and unrecognized host
+tools keep working, flagged `degraded`, while state-changing kinds and kinds
+dangerous by name are blocked. Set `on_error: deny_all` to block everything. An
+unwritable audit file or a `guard.yaml` that cannot be parsed does not degrade
+the guard at all: it keeps evaluating (without audit, or on the built-in
+defaults with `config_error` in its decisions).
 
 ## Enforcement Mode vs Advisory Mode
 
@@ -167,14 +175,19 @@ accidentally fail open:
 - `requires_confirmation` — `true` when the action needs genuine human
   authorization before proceeding.
 
-Both hooks are **fail-closed**: if the guard is unavailable or raises,
-`pre_tool_call` returns an explicit `deny` (`reason_code=GUARD_UNAVAILABLE`)
-and `pre_llm_call` substitutes a degraded-but-safe data block rather than
-passing raw untrusted content through.
+Neither hook lets a failure of the guard pass as approval. If the engine is
+unavailable or raises, `pre_tool_call` blocks state-changing and dangerous
+kinds (`reason_code=GUARD_DEGRADED_DANGEROUS_KIND`, or everything with
+`on_error: deny_all`) and lets reads through flagged `degraded`; `pre_llm_call`
+substitutes a degraded-but-safe data block rather than passing raw untrusted
+content through.
 
-Configuration lives in [`guard.yaml`](guard.yaml); load it with
-`agent_security_guard.load_config("guard.yaml")` (built-in defaults are used
-when the file is absent; a malformed file fails loudly).
+Configuration lives in [`guard.yaml`](guard.yaml). The plugin loads the first
+of `/etc/agent-security-guard/guard.yaml`, `~/.hermes/guard.yaml`, and the copy
+shipped next to it. It never loads one from the working directory, which is the
+agent's workspace. As a library, load it with
+`agent_security_guard.load_config(path)` (built-in defaults are used when the
+file is absent; a malformed file fails loudly).
 
 ## Development
 

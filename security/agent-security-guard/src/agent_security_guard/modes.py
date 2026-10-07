@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import dataclasses
 import os
-from typing import Optional
+from typing import Optional, Tuple
 
 from .types import Decision, GuardDecision, ReasonCode
 
@@ -79,12 +79,26 @@ def normalize_mode(mode: Optional[str]) -> str:
     return _MODE_ALIASES.get(value, DEFAULT_MODE)
 
 
-def effective_mode(configured: Optional[str]) -> str:
-    """The mode actually in force: the env override wins over the config."""
+MODE_SOURCE_ENV = "env"
+MODE_SOURCE_CONFIG = "config"
+
+
+def mode_with_source(configured: Optional[str]) -> Tuple[str, str]:
+    """Resolve the mode and say what decided it: ``(mode, "env" | "config")``.
+
+    A session (``GuardAdapter``) calls this once, when it is created, and keeps
+    the result. Reading the environment on every evaluation let any code in the
+    process switch a running guard to ``monitor``.
+    """
     override = os.environ.get(MODE_ENV_VAR)
     if override and override.strip():
-        return normalize_mode(override)
-    return normalize_mode(configured)
+        return normalize_mode(override), MODE_SOURCE_ENV
+    return normalize_mode(configured), MODE_SOURCE_CONFIG
+
+
+def effective_mode(configured: Optional[str]) -> str:
+    """The mode in force right now: the env override wins over the config."""
+    return mode_with_source(configured)[0]
 
 
 def is_blocking(mode: Optional[str]) -> bool:

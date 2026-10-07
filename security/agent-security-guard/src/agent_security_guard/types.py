@@ -331,6 +331,9 @@ class GuardContext:
     short_confirmation: bool = False
     previous_action_was_explicitly_authorized: bool = False
     requested_action_from_nonuser_context: bool = False
+    # Set by GuardAdapter once ``mode`` holds the session's fixed mode, so the
+    # policy does not consult the environment again for this evaluation.
+    mode_resolved: bool = False
 
 
 @dataclass
