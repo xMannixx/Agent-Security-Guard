@@ -181,9 +181,22 @@ including `test_availability.py`, passes unchanged.
 - `memory_lanes` in guard.yaml: map your memory's own lane names to the lane
   they amount to. A misspelled lane fails loudly, and the five built-in lanes
   cannot be redefined.
-- Hermes' `memory` tool can be put under the memory rules with
-  `tool_tiers: {memory: memory_write}`. It stays an unrecognized tool by
-  default (allowed and audited, also after a web page was read).
+- **A host's memory tool is recognized as a memory write** (`memory` in
+  Hermes, `save_memory`, `add_memory`, `store_memory`, `update_memory`,
+  `memory_add`, `memory_save`, `memory_store`, `memory_update`, also behind a
+  namespace prefix). Hermes puts what `memory` stores into every later turn, so
+  a line written there at a page's suggestion outlives the turn. Such a call
+  names no lane: it is asked about once outside content was read in the chain
+  (`UNTRUSTED_CONTENT_IN_CONTEXT`, tuned by `tiers.after_untrusted_content`),
+  denied when untrusted content proposed it or the origin is untrusted, covered
+  by a no-write scope, and blocked while the engine cannot evaluate. On a
+  trusted or unspecified origin with nothing from outside in the chain it is
+  allowed and audited, as it was while unrecognized; `strict` mode still asks
+  (`MEMORY_WRITE_REQUIRES_CONFIRMATION`). Memory reads (`memory_search`,
+  `memory_get`) stay unrecognized and free. `tool_tiers: {memory: unknown}`
+  takes a tool out of the rules again. This changes two cases
+  `test_availability.py` used to hold (`memory` unrecognized, and free after a
+  web read), on the owner's decision.
 - `self_modification_paths`, and the tier settings `local_write`,
   `recognized_host_tool`, `unknown_action_from_untrusted`.
 - `normalize_action`, `mode_with_source`, `GuardAdapter.mode_source`,

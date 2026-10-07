@@ -65,7 +65,7 @@ install directory, never from the working directory.
 
 The hard rules apply to a host's tools under the names the host gives them:
 `terminal`, `bash`, `execute_code`, `write_file`, `patch`, `send_email`,
-`skill_manage`, and the like are recognized (also behind a namespace prefix),
+`skill_manage`, `memory`, and the like are recognized (also behind a namespace prefix),
 and a file tool writing `SKILL.md` or `guard.yaml` counts as self-modification.
 Recognized host tools are not gated more than before on a trusted origin; they
 are denied from untrusted content. Declare anything else in `tool_tiers`
@@ -80,16 +80,16 @@ observation only: denied from anything untrusted, asked about when no source
 is stated. A write that names no lane the guard knows is not taken for
 evidence: allowed and audited on a trusted origin, denied from an untrusted
 source, asked about after outside content was read. Map your own lane names in
-`memory_lanes`. A host memory tool is unrecognized until you declare it
-(`tool_tiers: {memory: memory_write}` for Hermes).
+`memory_lanes`. A host's memory tool (`memory` in Hermes, `save_memory`,
+`add_memory`, ...) names no lane and follows that rule.
 
 ## Content the agent read
 
 A web page the user asked for is still a page somebody else wrote. The results
 of web, search and browser tools (`untrusted_content_tools`) are wrapped as
 data-only blocks, and for the rest of the chain a shell command, file write,
-install, config change or external write asks for confirmation
-(`UNTRUSTED_CONTENT_IN_CONTEXT`). Reads stay free. In Hermes one user turn is
+install, config change, external write or a write by the host's memory tool
+asks for confirmation (`UNTRUSTED_CONTENT_IN_CONTEXT`). Reads stay free. In Hermes one user turn is
 one chain. `tiers.after_untrusted_content` tunes it.
 
 ## Status

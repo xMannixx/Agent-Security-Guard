@@ -58,12 +58,15 @@ _SELF_MODIFICATION = (
     "edit_skill", "patch_skill", "delete_skill",
 )
 
-# Memory tools (Hermes: ``memory``) are deliberately absent too. Recognized,
-# a memory write would be asked about once outside content is in the chain, and
-# ``test_availability.py`` holds that it stays free there. The operator opts in
-# by declaring the tool as ``memory_write`` in ``tool_tiers``. A call that names
-# no lane is then not taken for an evidence write: untrusted content may not
-# make it, and after outside content it is asked about.
+# Tools that write the agent's memory (Hermes: ``memory``, whose entries are
+# put into every later turn). Such a call names no lane, and is not taken for
+# an evidence write: untrusted content may not make it, and once outside
+# content is in the chain it is asked about. Memory reads (``memory_search``,
+# ``memory_get``) are not here.
+_MEMORY_WRITE = (
+    "memory", "save_memory", "add_memory", "store_memory", "update_memory",
+    "memory_add", "memory_save", "memory_store", "memory_update",
+)
 
 _INSTALL = (
     "install_package", "package_install", "apt_install", "brew_install",
@@ -86,5 +89,6 @@ HOST_TOOL_TIER: Dict[str, ActionTier] = {
     **{name: ActionTier.LOCAL_WRITE for name in _LOCAL_WRITE},
     **{name: ActionTier.EXTERNAL_WRITE for name in _EXTERNAL_WRITE},
     **{name: ActionTier.SELF_MODIFICATION for name in _SELF_MODIFICATION},
+    **{name: ActionTier.MEMORY_WRITE for name in _MEMORY_WRITE},
     **{name: ActionTier.INSTALL for name in _INSTALL},
 }

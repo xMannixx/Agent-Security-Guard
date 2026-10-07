@@ -433,7 +433,7 @@ def test_recognized_host_tools_work_for_a_trusted_user(tool):
 
 @pytest.mark.parametrize("tool", [
     "read_terminal", "todo_write", "retrieval_search", "evaluate_model",
-    "memory", "send_message", "process_manage", "web_extract",
+    "memory_search", "memory_get", "send_message", "process_manage", "web_extract",
 ])
 def test_names_that_only_resemble_dangerous_ones_stay_unrecognized(tool):
     assert classify_action(AgentAction(kind=tool)) is ActionTier.UNKNOWN
@@ -604,7 +604,7 @@ def _after_web_read(next_action, context=None, config=None):
     AgentAction(kind="search_files", target="TODO"),
     AgentAction(kind="web_search", target="python urlsplit"),
     AgentAction(kind="http_get", target="https://docs.python.org/3/"),
-    AgentAction(kind="memory", metadata={"action": "add"}),
+    AgentAction(kind="memory_search", metadata={"query": "deploy steps"}),
     AgentAction(kind="send_message", metadata={"text": "done"}),
     AgentAction(kind="todo_write"),
     AgentAction(kind="delegate_task"),
@@ -724,38 +724,72 @@ def test_memory_tool_passed_by_name_with_a_lane_works(isolated_plugin):
     assert payload["allowed"] is True, payload
 
 
-def _declared_memory_tool(**tiers):
-    config = load_config(None)
-    config.tool_tiers = {"memory": "memory_write"}
-    config.tiers.update(tiers)
-    return config
-
-
 HERMES_MEMORY_CALL = AgentAction(kind="memory", target="user", metadata={"action": "add"})
 
 
 @pytest.mark.parametrize("origin", [OriginTrust.TRUSTED_USER, OriginTrust.UNSPECIFIED])
-def test_declared_memory_tool_works_on_a_clean_chain(origin):
-    config = _declared_memory_tool()
-    decision = GuardAdapter(config=config).guard_action(
-        HERMES_MEMORY_CALL, GuardContext(origin_trust=origin, config=config)
+def test_host_memory_tool_works_on_a_clean_chain(origin):
+    decision = GuardAdapter().guard_action(
+        HERMES_MEMORY_CALL, GuardContext(origin_trust=origin)
     )
     assert decision.decision in (Decision.ALLOW, Decision.ALLOW_WITH_WARNING), decision
 
 
-def test_declared_memory_tool_the_user_ordered_is_not_asked_about_after_a_web_read():
-    config = _declared_memory_tool()
+@pytest.mark.parametrize("args", [
+    {"action": "add", "target": "user", "content": "prefers short answers"},
+    {"action": "replace", "target": "memory", "old_text": "uses pip", "content": "uses uv"},
+    {"target": "memory", "operations": [{"action": "remove", "old_text": "stale"}]},
+])
+def test_hermes_memory_calls_run_in_a_turn_that_read_nothing_from_outside(isolated_plugin, args):
+    def call(tool, tool_args):
+        return isolated_plugin.guard_tool_call(
+            tool_name=tool, args=tool_args, session_id="avail-mem", turn_id="t1"
+        )
+
+    call("read_file", {"path": "README.md"})
+    call("terminal", {"command": "ls"})
+    payload = call("memory", args)
+    assert payload["allowed"] is True, payload
+    assert "action" not in payload
+
+
+def test_memory_write_in_the_turn_after_a_web_read_is_free_again(isolated_plugin):
+    payloads = [
+        isolated_plugin.guard_tool_call(
+            tool_name=tool, args={}, session_id="avail-mem", turn_id=turn
+        )
+        for tool, turn in (("web_extract", "t1"), ("memory", "t2"))
+    ]
+    assert payloads[1]["allowed"] is True, payloads[1]
+
+
+def test_host_memory_tool_the_user_ordered_is_not_asked_about_after_a_web_read():
     context = GuardContext(
         origin_trust=OriginTrust.TRUSTED_USER,
         user_intent_origin=UserIntentOrigin.HUMAN_EXPLICIT,
-        config=config,
     )
-    decision = _after_web_read(HERMES_MEMORY_CALL, context, config)
+    decision = _after_web_read(HERMES_MEMORY_CALL, context)
     assert decision.decision in (Decision.ALLOW, Decision.ALLOW_WITH_WARNING), decision
 
 
 def test_operator_can_reduce_the_memory_ask_to_an_audit_record():
-    config = _declared_memory_tool(after_untrusted_content="allow_with_warning")
+    config = load_config(None)
+    config.tiers["after_untrusted_content"] = "allow_with_warning"
     context = GuardContext(origin_trust=OriginTrust.TRUSTED_USER, config=config)
     decision = _after_web_read(HERMES_MEMORY_CALL, context, config)
     assert decision.decision is Decision.ALLOW_WITH_WARNING
+
+
+def test_operator_can_take_the_memory_tool_out_of_the_rules_again():
+    config = load_config(None)
+    config.tool_tiers = {"memory": "unknown"}
+    context = GuardContext(origin_trust=OriginTrust.TRUSTED_USER, config=config)
+    decision = _after_web_read(HERMES_MEMORY_CALL, context, config)
+    assert decision.decision is Decision.ALLOW_WITH_WARNING
+    assert decision.reason_code is ReasonCode.UNKNOWN_ACTION_AUDITED
+
+
+@pytest.mark.parametrize("tool", ["memory_search", "memory_get", "session_search", "recall"])
+def test_memory_reads_stay_free_after_a_web_read(tool):
+    decision = _after_web_read(AgentAction(kind=tool, metadata={"query": "deploy steps"}))
+    assert decision.decision in (Decision.ALLOW, Decision.ALLOW_WITH_WARNING), decision

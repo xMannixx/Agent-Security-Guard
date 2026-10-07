@@ -46,8 +46,8 @@ with the user's standing. A rule keyed on who asked never fires.
 What the guard can know is which actions bring outside content into the model's
 context (`untrusted_content_tools`, and any read of a remote URL). For the rest
 of the chain it then asks before a shell command, file write, install, config
-change, external write or self-modification (`UNTRUSTED_CONTENT_IN_CONTEXT`),
-and applies the memory-lane rules. It asks rather than denies because it knows
+change, external write, self-modification or a write by a host's memory tool
+(`UNTRUSTED_CONTENT_IN_CONTEXT`), and applies the memory-lane rules. It asks rather than denies because it knows
 the content is there, not that the content proposed the action. Reads stay
 free, tools the guard cannot classify stay free, and an action the host reports
 as explicitly ordered by the user is not asked about.
@@ -83,10 +83,13 @@ The source is read from a list of what is trusted (`observation`,
 `conversation`), not of what is not: `web` or `email` is untrusted without
 needing an entry.
 
-Not covered by default: a host memory tool nobody declared. Hermes' `memory`
-is an unrecognized tool, allowed and audited, also after a web page was read.
-Its entries are put into every later turn, so the operator should declare it
-(`tool_tiers: {memory: memory_write}`).
+A host's own memory tool names no lane at all, so it falls under the second
+point. Hermes' `memory` matters most here: what it stores is put into every
+later turn, so one line written at a page's suggestion outlives the turn the
+page was read in. The common names (`memory`, `save_memory`, `add_memory`,
+...) are recognized as memory writes; a tool with another name is declared in
+`tool_tiers`. On a trusted origin with nothing from outside in the chain such
+a write is allowed and audited, as it was while unrecognized.
 
 ## Host tool names
 

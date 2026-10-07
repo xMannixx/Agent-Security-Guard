@@ -865,6 +865,15 @@ def _decide_memory_write(action: AgentAction, context: GuardContext) -> GuardDec
                 "cannot be told from a privileged write. Evidence is the "
                 "lane it may use.",
             ))
+        if resolve_mode(context) == MODE_STRICT:
+            # Strict asked about a host's memory tool while it was
+            # unrecognized; recognizing it must not make strict weaker.
+            return _decide(
+                Decision.REQUIRE_CONFIRMATION,
+                ReasonCode.MEMORY_WRITE_REQUIRES_CONFIRMATION,
+                f"Memory write names {what}; strict mode requires explicit "
+                "confirmation.",
+            )
         return _decide(
             Decision.ALLOW_WITH_WARNING,
             ReasonCode.UNKNOWN_MEMORY_LANE_AUDITED,

@@ -272,6 +272,18 @@ def test_unreadable_lane_on_a_trusted_origin_is_allowed_and_audited(lane):
     assert d.audit_required is True
 
 
+@pytest.mark.parametrize("lane", ["notes", None])
+def test_strict_mode_asks_about_a_lane_it_cannot_read(lane):
+    d = _memory(lane, origin_trust=OriginTrust.TRUSTED_USER, mode="strict")
+    assert d.decision is Decision.REQUIRE_CONFIRMATION
+    assert d.reason_code is ReasonCode.MEMORY_WRITE_REQUIRES_CONFIRMATION
+
+
+def test_strict_mode_leaves_a_named_lane_alone():
+    d = _memory("evidence", origin_trust=OriginTrust.TRUSTED_USER, mode="strict")
+    assert d.decision is Decision.ALLOW
+
+
 def test_operator_can_tune_the_unknown_lane_denial():
     config = load_config(None)
     config.tiers["memory_external_to_unknown_lane"] = "require_confirmation"
