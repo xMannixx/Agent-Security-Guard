@@ -9,6 +9,10 @@
 #   uv pip compile requirements-dev.txt --universal --python-version 3.8 \
 #       --generate-hashes --no-header -o requirements-ci.txt
 # and put this comment back on top.
+#
+# Do not edit a version by hand, and do not let an updater do it: a package
+# appears once per range of Python versions, at the newest release that still
+# supports that range.
 colorama==0.4.6 ; sys_platform == 'win32' \
     --hash=sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44 \
     --hash=sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6
