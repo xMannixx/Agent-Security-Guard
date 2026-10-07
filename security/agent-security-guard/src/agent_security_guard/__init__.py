@@ -7,7 +7,7 @@ classification, the hard-rule matrix, and the type system.
 from __future__ import annotations
 
 from .action_guard import check_action
-from .actions import classify_action, normalize_action
+from .actions import brings_untrusted_content, classify_action, normalize_action
 from .adapter import GuardAdapter
 from .audit import AuditLog, build_event, record_event
 from .envelope import resolve_origin_trust
@@ -79,6 +79,7 @@ __all__ = [
     "check_action",
     "classify_action",
     "normalize_action",
+    "brings_untrusted_content",
     "decide_action",
     "load_config",
     "domain_allowed",

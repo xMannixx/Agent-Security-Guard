@@ -151,19 +151,33 @@ offers "always allow" per `rule_key`, so the key is bound to the exact call and
 one approval does not cover a different patch. `approve` needs a Hermes version
 with plugin approvals; an older one ignores it.
 
+Hermes also calls `transform_tool_result` with each finished tool result
+before it enters the model's context. That is where web content arrives, so
+that is where the plugin wraps it: the result of a web, search or browser tool
+(`untrusted_content_tools` in `guard.yaml`) comes back as a data-only block,
+whole, with its origin stated. Results of local tools are left alone, and so is
+everything in `monitor` mode or with `wrap_tool_results: false`.
+
 What acts in Hermes, and what cannot:
 
-- **Acts:** the self-modification bar (`skill_manage`, file tools on `SKILL.md`
-  or `guard.yaml`), the secret-read then external-write chain (one Hermes turn
-  is one chain), secret payloads in external writes, the block on
+- **Acts without any provenance:** the self-modification bar (`skill_manage`,
+  file tools on `SKILL.md` or `guard.yaml`), the secret-read then
+  external-write chain, secret payloads in requests, the block on
   state-changing tools while the guard cannot evaluate, and, if you set
   `scope_from_text: true`, the no-write scope read from your message.
-- **Cannot act:** every rule that depends on where an action came from
-  ("untrusted content cannot run a shell", "cannot write files"). Hermes passes
-  the hook no provenance, and the plugin does not invent any.
-- **Not wired:** wrapping web and tool content as data. Hermes gives
-  `pre_llm_call` the user's message, not the content its tools fetched, so that
-  hook has nothing to wrap.
+- **Acts on what was read:** once a web, search or browser tool ran in a turn,
+  a shell command, file write, install, config change or external write later
+  in that turn goes to the approval prompt (`UNTRUSTED_CONTENT_IN_CONTEXT`).
+  The prompt offers "allow for this session" per tool. Reads and tools the
+  guard cannot classify stay free, and the next turn starts clean. Set
+  `tiers.after_untrusted_content: allow_with_warning` to only record it.
+- **Cannot act:** rules that depend on who asked for an action ("untrusted
+  content cannot run a shell" as a denial). Hermes passes the hook no
+  provenance, and the plugin does not invent any. The rule above is the
+  substitute: it knows the content is there, not that it asked.
+
+One Hermes turn is one chain. Content read in an earlier turn is still in the
+conversation, but no longer counts.
 
 ### Where the plugin reads its policy
 

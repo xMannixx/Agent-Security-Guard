@@ -122,6 +122,19 @@ including `test_availability.py`, passes unchanged.
 
 ### Added
 
+- **Asks before a state change once outside content was read.** After a web,
+  search or browser tool ran in the chain (`untrusted_content_tools`, or any
+  read of a remote URL), a shell command, file write, install, config change,
+  external write or self-modification needs confirmation
+  (`UNTRUSTED_CONTENT_IN_CONTEXT`). This is the case the origin-based rules
+  miss: the user asks for a page and the page proposes the next action. Reads
+  and unrecognized tools stay free; an action the host reports as explicitly
+  ordered by the user is exempt; `tiers.after_untrusted_content` tunes it
+  (`allow_with_warning` records it without asking).
+- **Web content is wrapped as data in Hermes.** The plugin registers
+  `transform_tool_result` and returns the result of a web, search or browser
+  tool as a data-only block, uncut. `wrap_tool_results: false` switches it
+  off; `monitor` mode does not wrap.
 - `guard_status()` reports `config_error`, `mode`, and `mode_source`.
 - `tool_tiers` in guard.yaml: declare the tier of your host's own tools. Wins
   over the built-in tables; a misspelled tier fails loudly.

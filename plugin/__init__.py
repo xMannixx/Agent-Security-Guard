@@ -23,10 +23,15 @@ What Hermes actually sends and reads (checked against its plugin dispatcher):
   one (see ``_with_host_directive``).
 - ``pre_llm_call`` gets the user's message and ids, never ``untrusted_items``,
   so the wrapper above has nothing to wrap there.
+- ``transform_tool_result`` gets each finished tool result before it enters the
+  model's context and takes a returned string as its replacement. That is where
+  web content arrives in Hermes, so that is where it is wrapped
+  (``wrap_tool_result``).
 """
 
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import json
 import logging
@@ -58,6 +63,7 @@ try:
         GuardAdapter,
         OriginTrust,
         UserIntentOrigin,
+        brings_untrusted_content,
         classify_action,
         detect_no_write_scope,
         is_short_confirmation,
@@ -159,6 +165,67 @@ def register(ctx) -> None:
     """Entry point Hermes calls to wire the hooks."""
     ctx.register_hook("pre_llm_call", wrap_untrusted_context)
     ctx.register_hook("pre_tool_call", guard_tool_call)
+    try:
+        ctx.register_hook("transform_tool_result", wrap_tool_result)
+    except Exception as exc:  # a host without this hook must keep the other two
+        logger.warning("transform_tool_result hook not registered: %s", exc)
+
+
+# Fallback copy of the package's untrusted-content tool patterns, for when the
+# package cannot be imported. tests/test_plugin.py keeps the two in step.
+_UNTRUSTED_CONTENT_TOOLS = (
+    "web_fetch", "web_extract", "web_search", "webfetch", "websearch",
+    "x_search", "http_get", "https_get", "fetch_url", "read_url", "scrape",
+    "browser", "browser_*",
+)
+
+
+def _untrusted_content_tool_by_name(tool_name: str) -> bool:
+    name = (tool_name or "").strip().lower()
+    return any(fnmatch.fnmatchcase(name, pattern) for pattern in _UNTRUSTED_CONTENT_TOOLS)
+
+
+def wrap_tool_result(**kwargs) -> Optional[str]:
+    """Wrap the result of a web, search or browser tool as a data block.
+
+    Hermes calls ``transform_tool_result`` with each finished result before it
+    enters the model's context and takes a returned string as the replacement;
+    ``None`` leaves the result as it is. Only string results of tools that
+    return outside content are touched, and not in ``monitor`` mode, which
+    changes nothing about the host.
+
+    If wrapping fails, the content still does not go through raw: it gets the
+    degraded wrapper.
+    """
+    result = kwargs.get("result")
+    tool_name = kwargs.get("tool_name") or kwargs.get("tool")
+    if not isinstance(result, str) or not result or not tool_name:
+        return None
+    tool_name = str(tool_name)
+    try:
+        adapter = _get_adapter()
+        if adapter is None:
+            return _fallback_block(result) if _untrusted_content_tool_by_name(tool_name) else None
+        if adapter.mode == "monitor" or not adapter.config.wrap_tool_results:
+            return None
+        action = _extract_action(kwargs)
+        if action is None or not brings_untrusted_content(
+            normalize_action(action), adapter.config
+        ):
+            return None
+        metadata: Dict[str, Any] = {"source_kind": "web_fetch"}
+        where = _first(_tool_args(kwargs), ("url", "urls", "query", "q"))
+        if isinstance(where, (list, tuple)):
+            where = ", ".join(str(item) for item in where)
+        if where:
+            metadata["url"] = str(where)
+        # clip=False: Hermes has already sized the result; cutting it here
+        # would cost the agent the rest of the page.
+        _report, block = adapter.guard_input(result, tool_name, "tool", metadata, clip=False)
+        return block
+    except Exception as exc:
+        logger.warning("wrapping the result of %s failed; using degraded wrapper: %s", tool_name, exc)
+        return _fallback_block(result) if _untrusted_content_tool_by_name(tool_name) else None
 
 
 def wrap_untrusted_context(**kwargs) -> Optional[Dict[str, Any]]:
@@ -238,7 +305,9 @@ def guard_tool_call(**kwargs) -> Optional[Dict[str, Any]]:
         not context.origin_trust.is_untrusted
         and context.user_intent_origin is not UserIntentOrigin.UNTRUSTED_SUGGESTION
     )
-    return _with_host_directive(payload, fingerprint, trusted_origin)
+    return _with_host_directive(
+        payload, fingerprint, trusted_origin, str(getattr(action, "kind", "") or "")
+    )
 
 
 # Denials that mean "the user has not ordered this", not "this is forbidden".
@@ -247,7 +316,10 @@ _NEEDS_USER_ORDER = frozenset({"SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER"}
 
 
 def _with_host_directive(
-    payload: Dict[str, Any], fingerprint: str, trusted_origin: bool = False
+    payload: Dict[str, Any],
+    fingerprint: str,
+    trusted_origin: bool = False,
+    kind: str = "",
 ) -> Dict[str, Any]:
     """Add the directive Hermes acts on to a non-allow decision.
 
@@ -270,9 +342,13 @@ def _with_host_directive(
         trusted_origin and reason in _NEEDS_USER_ORDER
     ):
         payload["action"] = "approve"
-        # Hermes offers "always allow" per rule_key. Tying the key to this
-        # exact call keeps one approval from covering a different patch later.
-        payload["rule_key"] = f"agent-security-guard:{reason}:{fingerprint}"
+        # Hermes offers "always allow" per rule_key. For a self-modification the
+        # key is tied to the exact call, so one approval cannot cover a
+        # different patch later. Other confirmations are keyed by reason and
+        # tool, so the user can settle "terminal after web content" once for
+        # the session instead of at every command.
+        scope = fingerprint if reason.startswith("SELF_MODIFICATION") else kind
+        payload["rule_key"] = f"agent-security-guard:{reason}:{scope}"
     else:
         payload["action"] = "block"
     return payload

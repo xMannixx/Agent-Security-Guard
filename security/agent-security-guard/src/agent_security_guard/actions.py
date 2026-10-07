@@ -9,12 +9,13 @@ on the mode and on who proposed it.
 from __future__ import annotations
 
 import dataclasses
+import fnmatch
 import json
 import re
 from typing import Any, Optional
 from urllib.parse import urlsplit
 
-from .host_tools import HOST_TOOL_TIER
+from .host_tools import HOST_TOOL_TIER, UNTRUSTED_CONTENT_TOOLS
 from .types import ActionTier, AgentAction, GuardConfig
 
 
@@ -131,6 +132,29 @@ def sends_to_remote(action: AgentAction) -> bool:
     """True for an action that puts its target on the network: a request to a
     URL, or a web search (the query goes to the search provider)."""
     return _is_remote(action.target) or _kind(action) == "web_search"
+
+
+def brings_untrusted_content(
+    action: AgentAction, config: Optional[GuardConfig] = None
+) -> bool:
+    """True when the action's result is content from outside the machine.
+
+    That is a tool on the untrusted-content list (web fetch, search, browser),
+    also behind a namespace prefix, or any read of a remote URL. It says
+    nothing about who asked for the read: a page the user asked for is still a
+    page somebody else wrote.
+    """
+    kind = _kind(action)
+    patterns = (
+        config.untrusted_content_tools if config is not None else UNTRUSTED_CONTENT_TOOLS
+    )
+    names = {kind, _NAMESPACE_SEPARATOR.split(kind)[-1]}
+    if any(fnmatch.fnmatchcase(name, pattern) for name in names for pattern in patterns):
+        return True
+    return (
+        classify_action(action, config) is ActionTier.READ_ONLY
+        and _is_remote(action.target)
+    )
 
 
 def carries_data_out(action: AgentAction) -> bool:

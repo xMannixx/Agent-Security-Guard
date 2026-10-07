@@ -83,9 +83,21 @@ class GuardAdapter:
         source: str,
         channel: str,
         metadata: Optional[Dict[str, Any]] = None,
+        *,
+        clip: bool = True,
     ) -> Tuple[GuardReport, str]:
-        """Scan and wrap untrusted content. Returns (report, safe_block)."""
-        report = scan_input(content, source, channel, metadata, self.config)
+        """Scan and wrap untrusted content. Returns (report, safe_block).
+
+        ``clip=False`` keeps the content whole: for a tool result the host has
+        already sized, cutting it at ``max_content_chars`` would cost the agent
+        the rest of the page.
+        """
+        config = self.config
+        if not clip:
+            config = dataclasses.replace(
+                config, limits={**config.limits, "max_content_chars": 0}
+            )
+        report = scan_input(content, source, channel, metadata, config)
         return report, wrap_untrusted(report)
 
     def guard_action(

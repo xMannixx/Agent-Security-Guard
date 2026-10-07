@@ -36,6 +36,22 @@ Each class maps to a deterministic outcome, covered by
 | 7 | Unauthorized self-modification | Agent patches its own `SKILL.md` / procedural rules without an explicit user order, or off a bare "yes" / under a no-write scope | `SELF_MODIFICATION` tier is never a direct allow; no-write scope and ambiguous-confirmation gates deny first; a write needs an explicit, hash-bound confirmation (two-phase) | `EXPLICIT_NO_WRITE_SCOPE_VIOLATION`, `SHORT_CONFIRMATION_NO_PRIOR_AUTH`, `SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER` |
 | 8 | Neutralizing the guard | No rule is beaten; the guard is made to skip it: tool arguments shaped so the evaluation raises, an audit write that fails, a `guard.yaml` planted in the workspace, `AGENT_SECURITY_GUARD_MODE` flipped at runtime | Inputs are normalized before evaluation; an audit failure never replaces a decision; an evaluation error blocks state-changing kinds; policy is read only from operator locations, never the working directory; the mode is fixed when the guard starts | the rule's own code, or `GUARD_DEGRADED_DANGEROUS_KIND` |
 
+## Content in context
+
+Classes 1 and 6 were written as "untrusted content issues an action". In the
+common case nobody untrusted issues anything: the user asks for a page, the
+page says "now run this", and the tool call that follows comes from the agent
+with the user's standing. A rule keyed on who asked never fires.
+
+What the guard can know is which actions bring outside content into the model's
+context (`untrusted_content_tools`, and any read of a remote URL). For the rest
+of the chain it then asks before a shell command, file write, install, config
+change, external write or self-modification (`UNTRUSTED_CONTENT_IN_CONTEXT`),
+and applies the memory-lane rules. It asks rather than denies because it knows
+the content is there, not that the content proposed the action. Reads stay
+free, tools the guard cannot classify stay free, and an action the host reports
+as explicitly ordered by the user is not asked about.
+
 ## Host tool names
 
 The classes above describe transitions, not tool names. A host forwards its

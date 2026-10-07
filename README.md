@@ -93,6 +93,7 @@ defaults with `config_error` in its decisions).
 | read-only / GET / search | `allow` | `ALLOW_READ_ONLY` |
 | local read of secret-class content | `require_confirmation` | `SENSITIVE_PATH_READ` |
 | untrusted web/doc -> shell | `deny` | `UNTRUSTED_TO_SHELL` |
+| after a web page or search result was read in the chain: shell, file write, install, config change, external write | `require_confirmation` | `UNTRUSTED_CONTENT_IN_CONTEXT` |
 | shell from trusted user | `require_confirmation` | `SHELL_FROM_USER_REQUIRES_CONFIRMATION` |
 | web-suggested command relayed by a bare "yes" | `deny` | `CONFIRMATION_ORIGIN_UNTRUSTED` |
 | install from untrusted | `deny` | `INSTALL_FROM_UNTRUSTED` |
@@ -217,8 +218,11 @@ accidentally fail open:
   user), with a `rule_key` bound to the exact call. Hermes reads this field and
   nothing else from a hook result; without it the decision was ignored there.
 
-Hermes passes the hook no provenance, so in Hermes the rules that need none are
-the ones that act: self-modification goes to the approval prompt, a secret read
+In Hermes the plugin also wraps the results of web, search and browser tools
+as data blocks (`transform_tool_result`), and once such a tool ran in a turn it
+sends shell commands and file writes later in that turn to the approval prompt.
+Hermes passes the hook no provenance, so rules that deny by who asked cannot
+fire there; self-modification goes to the approval prompt, a secret read
 followed by an external write in the same turn is blocked, and a failing guard
 blocks state-changing tools. See
 [docs/INSTALLATION.md](docs/INSTALLATION.md#what-the-plugin-does-in-hermes).

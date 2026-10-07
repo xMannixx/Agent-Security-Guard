@@ -583,3 +583,99 @@ def test_file_contents_are_not_scanned_as_a_request_body():
         origin_trust="trusted_user",
     )
     assert payload["allowed"] is True
+
+
+# --------------------------------------------------------------------------- #
+# 11. Reading the web must not stop the agent from working
+# --------------------------------------------------------------------------- #
+
+WEB_READ = AgentAction(kind="web_extract", metadata={"urls": ["https://example.com/docs"]})
+
+
+def _after_web_read(next_action, context=None, config=None):
+    context = context or GuardContext(origin_trust=OriginTrust.TRUSTED_USER)
+    adapter = GuardAdapter(config=config)
+    adapter.guard_action(WEB_READ, context)
+    return adapter.guard_action(next_action, context)
+
+
+@pytest.mark.parametrize("action", [
+    AgentAction(kind="read_file", target="README.md"),
+    AgentAction(kind="search_files", target="TODO"),
+    AgentAction(kind="web_search", target="python urlsplit"),
+    AgentAction(kind="http_get", target="https://docs.python.org/3/"),
+    AgentAction(kind="memory", metadata={"action": "add"}),
+    AgentAction(kind="send_message", metadata={"text": "done"}),
+    AgentAction(kind="todo_write"),
+    AgentAction(kind="delegate_task"),
+])
+def test_reads_and_unrecognized_tools_stay_free_after_a_web_read(action):
+    decision = _after_web_read(action)
+    assert decision.decision in (Decision.ALLOW, Decision.ALLOW_WITH_WARNING), decision
+
+
+def test_state_change_after_a_web_read_asks_rather_than_denies():
+    decision = _after_web_read(AgentAction(kind="terminal", target="pytest -q"))
+    assert decision.decision is Decision.REQUIRE_CONFIRMATION
+
+
+def test_state_change_before_any_web_read_is_untouched():
+    decision = GuardAdapter().guard_action(
+        AgentAction(kind="terminal", target="pytest -q"),
+        GuardContext(origin_trust=OriginTrust.TRUSTED_USER),
+    )
+    assert decision.decision is Decision.ALLOW_WITH_WARNING
+
+
+def test_action_the_user_explicitly_ordered_is_not_asked_about_again():
+    context = GuardContext(
+        origin_trust=OriginTrust.TRUSTED_USER,
+        user_intent_origin=UserIntentOrigin.HUMAN_EXPLICIT,
+    )
+    decision = _after_web_read(AgentAction(kind="write_file", target="notes.md"), context)
+    assert decision.reason_code is not ReasonCode.UNTRUSTED_CONTENT_IN_CONTEXT
+    assert decision.decision is Decision.ALLOW_WITH_WARNING
+
+
+def test_next_turn_starts_clean():
+    payloads = [
+        guard_plugin.guard_tool_call(tool_name=tool, args={}, session_id="avail-s", turn_id=turn)
+        for tool, turn in (("web_extract", "avail-1"), ("terminal", "avail-2"))
+    ]
+    assert payloads[1]["allowed"] is True
+
+
+def test_operator_can_reduce_the_rule_to_an_audit_record():
+    config = load_config(None)
+    config.tiers["after_untrusted_content"] = "allow_with_warning"
+    context = GuardContext(origin_trust=OriginTrust.TRUSTED_USER, config=config)
+    decision = _after_web_read(AgentAction(kind="terminal", target="pytest -q"), context, config)
+    assert decision.decision is Decision.ALLOW_WITH_WARNING
+
+
+@pytest.mark.parametrize("tool", ["read_file", "terminal", "search_files", "memory", "session_search"])
+def test_results_of_local_tools_are_left_alone(isolated_plugin, tool):
+    assert isolated_plugin.wrap_tool_result(tool_name=tool, args={}, result="output") is None
+
+
+def test_only_string_results_are_wrapped(isolated_plugin):
+    # A multimodal result (image parts) is not text to wrap.
+    assert isolated_plugin.wrap_tool_result(tool_name="web_extract", args={}, result={"image": "..."}) is None
+    assert isolated_plugin.wrap_tool_result(tool_name="web_extract", args={}, result="") is None
+
+
+def test_wrapping_keeps_the_whole_page(isolated_plugin):
+    # The host has already sized the result; the guard must not cut it.
+    page = "word " * 20000
+    wrapped = isolated_plugin.wrap_tool_result(tool_name="web_extract", args={}, result=page)
+    assert page in wrapped
+    assert "truncated" not in wrapped
+
+
+def test_monitor_mode_and_the_switch_leave_results_alone(isolated_plugin, monkeypatch):
+    adapter = isolated_plugin._get_adapter()
+    monkeypatch.setattr(adapter.config, "wrap_tool_results", False)
+    assert isolated_plugin.wrap_tool_result(tool_name="web_extract", args={}, result="x") is None
+    monkeypatch.setattr(adapter.config, "wrap_tool_results", True)
+    monkeypatch.setattr(adapter, "_mode", MODE_MONITOR)
+    assert isolated_plugin.wrap_tool_result(tool_name="web_extract", args={}, result="x") is None
