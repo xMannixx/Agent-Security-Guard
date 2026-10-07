@@ -51,6 +51,16 @@ including `test_availability.py`, passes unchanged.
 - **Tool arguments can no longer move a call out of its chain.** A `chain_id`
   in the model-written arguments reset the secret-read chain, turning the
   denial of the following external write into an ordinary confirmation.
+- **A remote host can no longer pose as local or allowlisted.** The host of a
+  write target was read with string splitting, so `https://evil.example#@localhost`,
+  `...?@127.0.0.1`, and `https://127.evil.example/` counted as loopback and
+  skipped the confirmation gate; the same trick passed the domain allowlist.
+  The target is now parsed as a client parses it, and a host that cannot be
+  read unambiguously gets no shortcut.
+- **Untrusted content gets no shortcut to local services or allowlisted
+  hosts.** A write to loopback was allowed from any origin, so web content
+  could reach a local Docker or Redis API unconfirmed. Both shortcuts now need
+  a trusted origin, and an allowlisted write is audited.
 - **An unrecognized tool is denied when untrusted content proposed it**
   (`UNTRUSTED_TO_UNKNOWN_ACTION`, when the host reports
   `user_intent_origin=untrusted_suggestion`). Tunable with

@@ -213,6 +213,10 @@ def test_explicitly_untrusted_origin_still_denies_shell():
     "http://localhost:3000/api/refresh",
     "http://127.0.0.1:8080/metrics",
     "https://[::1]:9000/x",
+    "localhost:3000/api/refresh",
+    "http://0.0.0.0:8000/x",
+    "http://127.0.0.2:9000/x",
+    "http://user:pw@localhost:5984/db",
 ])
 def test_loopback_writes_do_not_require_confirmation(target):
     decision = check_action(

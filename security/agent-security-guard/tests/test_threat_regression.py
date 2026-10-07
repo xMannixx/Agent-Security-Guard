@@ -500,3 +500,90 @@ def test_denial_reaches_hermes_in_the_form_it_acts_on(isolated_plugin, hermes_re
     )
     assert result["decision"] == "deny"
     assert hermes_reads(result) == "block"
+
+
+# WHERE A WRITE REALLY GOES -------------------------------------------------- #
+# A write to this machine or to an allowlisted domain skips the confirmation
+# gate. The host was read with string splitting, so a URL could name one host
+# to the guard and another to the client that sends the request.
+
+SPOOFED_LOCAL_TARGETS = [
+    "https://127.evil.test/collect",
+    "https://evil.test#@localhost/",
+    "https://evil.test?@127.0.0.1",
+    "http://evil.test\\@localhost/",
+    "http://evil.test\n@localhost/",
+    "http://localhost.evil.test/",
+    "http://127.0.0.1.evil.test/",
+]
+
+
+@pytest.mark.parametrize("target", SPOOFED_LOCAL_TARGETS)
+def test_remote_host_cannot_pose_as_loopback(target):
+    decision = check_action(
+        AgentAction(kind="http_post", target=target),
+        GuardContext(origin_trust=OriginTrust.TRUSTED_USER),
+    )
+    assert decision.decision is Decision.REQUIRE_CONFIRMATION
+    assert decision.reason_code is ReasonCode.EXTERNAL_WRITE_REQUIRES_CONFIRMATION
+
+
+@pytest.mark.parametrize("target", [
+    "https://evil.test#@api.github.com",
+    "https://evil.test?@api.github.com/x",
+    "https://api.github.com.evil.test/x",
+    "https://api.github.com@evil.test/x",
+])
+def test_remote_host_cannot_pose_as_allowlisted(target):
+    decision = check_action(
+        AgentAction(kind="http_post", target=target),
+        GuardContext(
+            origin_trust=OriginTrust.TRUSTED_USER,
+            domain_allowlist=["api.github.com"],
+        ),
+    )
+    assert decision.decision is Decision.REQUIRE_CONFIRMATION
+
+
+@pytest.mark.parametrize("target", [
+    "http://127.0.0.1:2375/containers/create",   # Docker API
+    "http://localhost:6379/",                    # Redis
+])
+def test_untrusted_content_gets_no_shortcut_to_local_services(target):
+    decision = check_action(AgentAction(kind="http_post", target=target), FROM_WEB)
+    assert decision.decision is Decision.REQUIRE_CONFIRMATION
+
+
+def test_untrusted_content_gets_no_shortcut_to_allowlisted_hosts():
+    decision = check_action(
+        AgentAction(kind="http_post", target="https://api.github.com/x"),
+        GuardContext(
+            origin_trust=OriginTrust.EXTERNAL_WEB,
+            domain_allowlist=["api.github.com"],
+        ),
+    )
+    assert decision.decision is Decision.REQUIRE_CONFIRMATION
+
+
+def test_allowlisted_write_leaves_an_audit_record():
+    class _Recorder:
+        def __init__(self):
+            self.events = []
+
+        def record(self, event):
+            self.events.append(event)
+
+    audit = _Recorder()
+    config = load_config(None)
+    config.domain_allowlist = ["api.github.com"]
+    adapter = GuardAdapter(config=config, audit=audit)
+    decision = adapter.guard_action(
+        AgentAction(kind="http_post", target="https://api.github.com/x"),
+        GuardContext(
+            origin_trust=OriginTrust.TRUSTED_USER,
+            domain_allowlist=config.domain_allowlist,
+            config=config,
+        ),
+    )
+    assert decision.decision is Decision.ALLOW
+    assert len(audit.events) == 1

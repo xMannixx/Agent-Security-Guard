@@ -13,9 +13,11 @@ are kept as two independent axes throughout.
 from __future__ import annotations
 
 import fnmatch
+import ipaddress
 import os
 import re
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlsplit
 
 from . import _miniyaml
 from .actions import recognized_by_name_only
@@ -251,33 +253,47 @@ def domain_allowed(target: str, allowlist: List[str]) -> bool:
     return False
 
 
-_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]", "0.0.0.0"})
-
-
 def is_loopback_target(target: str) -> bool:
     """True if the target addresses this machine (never leaves the host)."""
     host = _extract_host(target)
     if not host:
         return False
-    return host in _LOOPBACK_HOSTS or host.startswith("127.")
+    if host == "localhost":
+        return True
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        # A name is not an address, whatever it starts with: 127.evil.example
+        # resolves wherever its owner points it.
+        return False
+    # 0.0.0.0 and :: reach this host when used as a destination.
+    return address.is_loopback or address.is_unspecified
 
 
 def _extract_host(target: str) -> str:
+    """Host of a URL or ``host[:port][/path]`` string; ``""`` if it is unclear.
+
+    Parsed the way a client parses it, so that ``https://evil.example#@localhost``
+    or ``...?@localhost`` is read as evil.example. Where clients disagree (a
+    backslash or whitespace in the authority) there is no safe answer, and no
+    host means neither the loopback nor the allowlist shortcut applies.
+    """
     if not target:
         return ""
-    value = target.strip().lower()
-    for scheme in ("http://", "https://", "ftp://", "ftps://"):
-        if value.startswith(scheme):
-            value = value[len(scheme):]
-            break
-    value = value.split("/", 1)[0]
-    value = value.split("@")[-1]
-    # Bracketed IPv6 ("[::1]:9000") must not be split on its own colons.
-    if value.startswith("["):
-        closing = value.find("]")
-        if closing != -1:
-            return value[: closing + 1]
-    return value.split(":", 1)[0]
+    value = target.strip()
+    # urlsplit drops tabs and newlines before parsing; a client may not.
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in value):
+        return ""
+    if "://" not in value:
+        value = "//" + value
+    try:
+        parts = urlsplit(value)
+        host = parts.hostname or ""
+    except ValueError:
+        return ""
+    if "\\" in parts.netloc or any(ch.isspace() for ch in parts.netloc):
+        return ""
+    return host.rstrip(".").lower()
 
 
 def _untrusted(context: GuardContext) -> bool:
@@ -688,25 +704,30 @@ def _decide_external_write(
             ReasonCode.CONFIRMATION_ORIGIN_UNTRUSTED,
             "External write originated from untrusted content; denied.",
         )
-    # An explicitly allowlisted domain is pre-approved by the operator, so it
-    # does not need a per-call confirmation.
-    if context.domain_allowlist and domain_allowed(
-        action.target, context.domain_allowlist
-    ):
-        return _allow(
-            ReasonCode.ALLOW_DEFAULT,
-            "External write to an operator-allowlisted domain.",
-        )
-    # A write to loopback does not leave the machine, so it is not the
-    # exfiltration risk this tier exists for. Gating it broke ordinary local
-    # tooling (dashboards, local APIs) on every call. Secret payloads are
-    # already denied above, and the secret-read chain rule still applies.
-    if is_loopback_target(action.target):
-        return _decide(
-            Decision.ALLOW_WITH_WARNING,
-            ReasonCode.ALLOW_DEFAULT,
-            "Write to a local loopback address; allowed and audited.",
-        )
+    # The two shortcuts below skip the confirmation gate, so they are for
+    # trusted origins only. Untrusted content steering a write at a local admin
+    # API (Docker, Redis) or at an allowlisted host is not pre-approved.
+    if not _untrusted(context):
+        # An explicitly allowlisted domain is pre-approved by the operator, so
+        # it does not need a per-call confirmation. It is still audited.
+        if context.domain_allowlist and domain_allowed(
+            action.target, context.domain_allowlist
+        ):
+            return _decide(
+                Decision.ALLOW,
+                ReasonCode.ALLOW_DEFAULT,
+                "External write to an operator-allowlisted domain.",
+            )
+        # A write to loopback does not leave the machine, so it is not the
+        # exfiltration risk this tier exists for. Gating it broke ordinary
+        # local tooling (dashboards, local APIs) on every call. Secret payloads
+        # are already denied above, and the secret-read chain rule still applies.
+        if is_loopback_target(action.target):
+            return _decide(
+                Decision.ALLOW_WITH_WARNING,
+                ReasonCode.ALLOW_DEFAULT,
+                "Write to a local loopback address; allowed and audited.",
+            )
     return _trusted_origin_gate(
         action, context, "external_write",
         ReasonCode.EXTERNAL_WRITE_REQUIRES_CONFIRMATION,
