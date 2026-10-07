@@ -256,6 +256,21 @@ including `test_availability.py`, passes unchanged.
     blocked under `on_error: deny_all` and goes to the approval prompt in
     `strict` mode (`GUARD_UNREADABLE_CALL`). By default it still runs: the
     guard cannot tell a read from a write there.
+- **On the command line only exit code 0 means "go ahead".**
+  - `check-action` exited with 0 for everything but a denial, so
+    `check-action ... && run-it` ran what still needed a confirmation. It now
+    exits with 3 for `require_confirmation`.
+  - `scan <text>` opened its argument as a file whenever a file of that name
+    existed. Text that came from somewhere else therefore chose which file was
+    read and, with `--wrap`, printed. The argument is always text now; a file
+    is scanned with `--file PATH` (`-` for standard input).
+  - A `check-action` file the guard could not read as written was answered
+    anyway: a missing or misspelled `action` was evaluated as an action without
+    a kind, which is allowed; a misspelled `data_sensitivity` counted as
+    public; an unknown context field was ignored, as were the scope flags
+    (`no_write_scope_active`, `short_confirmation`, ...), which the command
+    line did not read at all. Such a file is an error now (exit 2, nothing on
+    standard output), and the scope flags are applied.
 - **The memory bridge no longer trusts a source it has no entry for.** Only
   `tool`, `external` and `inference` counted as untrusted, so a preference
   "from `web`" was allowed. Anything but `observation` and `conversation` is
@@ -299,6 +314,11 @@ including `test_availability.py`, passes unchanged.
   `audit.path` is relative to the state directory; an absolute one is used as
   given. A database from 0.3.0 is extended in place: its old records count as
   "unchained" in `audit --verify`.
+- **Command line, breaking:** `scan notes.md` scans the text `notes.md`
+  (and says so on standard error); use `scan --file notes.md`.
+  `check-action` exits with 3, not 0, when a confirmation is needed, and with
+  2 for an action file it cannot use as written or cannot open (that was a
+  traceback).
 - **A `guard.yaml` that loaded before may be refused now** if it contains a
   setting the guard does not know, a value it cannot use, or a key twice.
   Nothing in such a file was applied as its author meant it. Run

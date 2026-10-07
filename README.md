@@ -273,11 +273,27 @@ advice = guard.advise_memory("server runs ubuntu", "authorization", "external")
 ### CLI
 
 ```bash
-python -m agent_security_guard scan <file-or-text> --source-kind web_fetch --wrap
+python -m agent_security_guard scan "<text>" --source-kind web_fetch --wrap
+python -m agent_security_guard scan --file page.html --source-kind web_fetch --wrap
 python -m agent_security_guard check-action --json action.json
 python -m agent_security_guard audit --last 50
 python -m agent_security_guard audit --verify      # was the trail changed? exit 1 if so
 ```
+
+`scan` takes its argument as text, always; a file is scanned with `--file`
+(`--file -` reads standard input). `check-action` reads
+`{"action": {...}, "context": {...}}` and refuses a file it cannot use as
+written (a missing `action`, an unknown field, a value that is none of the
+allowed ones) instead of answering a different question.
+
+Exit codes, for use in scripts. Only `0` means "go ahead":
+
+| Code | Meaning |
+|---|---|
+| `0` | allowed, or the command did what it was asked |
+| `1` | denied, or the audit trail does not verify |
+| `2` | the command could not be carried out as written |
+| `3` | not allowed as it stands: a human has to confirm |
 
 ### Hermes / OpenClaw plugin
 
