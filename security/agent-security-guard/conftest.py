@@ -1,5 +1,6 @@
 """Make the stdlib-only package importable in tests without installation."""
 
+import os
 import sys
 from pathlib import Path
 
@@ -13,6 +14,22 @@ if str(_SRC) not in sys.path:
 _REPO_ROOT = Path(__file__).parent.parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _state_dir_of_its_own(tmp_path_factory):
+    """Keep the audit trail of a test run out of the real state directory.
+
+    The plugin's adapter is created on the first hook call and keeps its audit
+    file for the rest of the run, so this is set once for the whole session.
+    """
+    previous = os.environ.get("XDG_STATE_HOME")
+    os.environ["XDG_STATE_HOME"] = str(tmp_path_factory.mktemp("state"))
+    yield
+    if previous is None:
+        os.environ.pop("XDG_STATE_HOME", None)
+    else:
+        os.environ["XDG_STATE_HOME"] = previous
 
 
 @pytest.fixture

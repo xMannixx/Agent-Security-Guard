@@ -21,6 +21,7 @@ from urllib.parse import unquote
 from .action_guard import check_action
 from .actions import classify_action, normalize_action, outbound_text, sends_to_remote
 from .audit import AuditLog, build_event
+from .config_check import as_bool
 from .memory_bridge import advise_memory_write
 from .modes import MODE_SOURCE_ENV, apply_mode, mode_with_source
 from .policy import load_config, path_is_sensitive
@@ -66,6 +67,7 @@ class GuardAdapter:
         )
         self.audit = audit
         self.audit_failures = 0
+        self._log_allows = as_bool(self.config.audit.get("log_allows", True))
 
     @property
     def mode(self) -> str:
@@ -128,7 +130,11 @@ class GuardAdapter:
 
         self.history.record_action(action, context, final.decision)
 
-        if self.audit is not None and (final.audit_required or final.decision is not Decision.ALLOW):
+        if self.audit is not None and (
+            self._log_allows
+            or final.audit_required
+            or final.decision is not Decision.ALLOW
+        ):
             self._record_audit(event_type, final, action, tier, context)
         return final
 

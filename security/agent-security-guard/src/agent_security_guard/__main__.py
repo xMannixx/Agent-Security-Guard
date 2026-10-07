@@ -3,6 +3,7 @@
     python -m agent_security_guard scan <file-or-text> [--source ... --wrap]
     python -m agent_security_guard check-action --json action.json
     python -m agent_security_guard audit --last 50 [--db PATH]
+    python -m agent_security_guard audit --verify [--db PATH]
 """
 
 from __future__ import annotations
@@ -49,6 +50,10 @@ def main(argv: Optional[list] = None) -> int:
 
     audit_p = sub.add_parser("audit", help="Show recent audit events")
     audit_p.add_argument("--last", type=int, default=50)
+    audit_p.add_argument(
+        "--verify", action="store_true",
+        help="Check the hash chain of the trail; exit 1 if it is broken",
+    )
     audit_p.add_argument("--db", default=None, help="Audit DB/JSONL path override")
     audit_p.add_argument("--backend", default=None, choices=["sqlite", "jsonl"])
 
@@ -105,6 +110,11 @@ def _cmd_audit(args, config) -> int:
     if path:
         kwargs["path" if backend == "sqlite" else "jsonl_path"] = path
     log = AuditLog(**kwargs)
+    if args.verify:
+        check = log.verify()
+        log.close()
+        print(json.dumps(check.to_dict(), indent=2, ensure_ascii=False))
+        return 0 if check.ok else 1
     rows = log.last(args.last)
     log.close()
     print(json.dumps(rows, indent=2, ensure_ascii=False))

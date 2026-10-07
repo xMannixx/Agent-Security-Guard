@@ -205,6 +205,25 @@ including `test_availability.py`, passes unchanged.
 - **A mistyped `AGENT_SECURITY_GUARD_MODE` no longer replaces the configured
   mode.** `strct` selected the default mode, also over a configured `strict`.
   The override is ignored with a warning.
+- **The audit trail is kept where the agent's workspace cannot replace it, for
+  its owner alone, and shows when it was changed.**
+  - It was `guard-audit.db` in the working directory. A repository shipping a
+    file of that name that is no database made the sink fail to open, and the
+    plugin ran without audit; with the JSONL backend a link of that name had
+    the guard append a line per decision to whatever it pointed at. The trail
+    is now in `~/.local/state/agent-security-guard/` (or under
+    `$XDG_STATE_HOME`), and a link in its place is not followed.
+  - It was created with the process umask, usually `0644`. The file is `0600`
+    and its directory `0700`; an existing file is tightened.
+  - Records could be edited or removed without a trace. Each record carries
+    the hash of the one before it; `audit --verify` (and `AuditLog.verify()`)
+    fails on a record that was edited, removed from the middle or the start,
+    or added afterwards. It cannot show a cut-off end or a chain rebuilt by
+    someone who can write the file; it prints the newest hash to compare.
+  - A plain allow left no record. Every decision is recorded
+    (`audit.log_allows`, default `true`).
+  - A file tool that targets the trail is treated like one that targets
+    `guard.yaml`.
 - **The memory bridge no longer trusts a source it has no entry for.** Only
   `tool`, `external` and `inference` counted as untrusted, so a preference
   "from `web`" was allowed. Anything but `observation` and `conversation` is
@@ -241,6 +260,13 @@ including `test_availability.py`, passes unchanged.
 - A memory write that names no lane, or one the guard does not know, is
   `allow_with_warning` on a trusted origin (`UNKNOWN_MEMORY_LANE_AUDITED`)
   where it was a plain, unaudited `allow`.
+- **The audit trail moved.** New records go to
+  `~/.local/state/agent-security-guard/guard-audit.db`. A `guard-audit.db` in
+  a working directory from an earlier version is left where it is and not read
+  by `audit --last` any more (`--db PATH` still reads it). A relative
+  `audit.path` is relative to the state directory; an absolute one is used as
+  given. A database from 0.3.0 is extended in place: its old records count as
+  "unchained" in `audit --verify`.
 - **A `guard.yaml` that loaded before may be refused now** if it contains a
   setting the guard does not know, a value it cannot use, or a key twice.
   Nothing in such a file was applied as its author meant it. Run

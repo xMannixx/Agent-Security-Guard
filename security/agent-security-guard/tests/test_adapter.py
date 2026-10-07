@@ -7,6 +7,7 @@ from agent_security_guard import (
     OriginTrust,
     ReasonCode,
     UserIntentOrigin,
+    load_config,
 )
 
 
@@ -98,3 +99,32 @@ def test_history_respects_config_limit():
         adapter.guard_action(AgentAction(kind="http_get", target="https://x"),
                              GuardContext(origin_trust=OriginTrust.EXTERNAL_WEB))
     assert len(adapter.history) == 2
+
+
+def _audited(tmp_path, **audit_settings):
+    config = load_config(None)
+    config.audit.update(audit_settings)
+    audit = AuditLog(backend="sqlite", path=str(tmp_path / "a.db"))
+    return GuardAdapter(config=config, audit=audit), audit
+
+
+def test_plain_allow_is_recorded(tmp_path):
+    adapter, audit = _audited(tmp_path)
+    decision = adapter.guard_action(
+        AgentAction(kind="http_get", target="https://docs.python.org/3/"),
+        GuardContext(origin_trust=OriginTrust.TRUSTED_USER),
+    )
+    assert decision.decision is Decision.ALLOW
+    rows = audit.last(5)
+    audit.close()
+    assert [(row["decision"], row["reason_code"]) for row in rows] == [("allow", "ALLOW_READ_ONLY")]
+
+
+def test_plain_allows_can_be_left_out_of_the_trail(tmp_path):
+    adapter, audit = _audited(tmp_path, log_allows=False)
+    trusted = GuardContext(origin_trust=OriginTrust.TRUSTED_USER)
+    adapter.guard_action(AgentAction(kind="read_file", target="README.md"), trusted)
+    adapter.guard_action(AgentAction(kind="terminal", target="ls"), trusted)
+    rows = audit.last(5)
+    audit.close()
+    assert [row["decision"] for row in rows] == ["allow_with_warning"]
