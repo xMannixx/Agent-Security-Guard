@@ -41,6 +41,15 @@ modes.
    `tests/test_threat_regression.py` and update
    `references/threat-model.md`.
 
+## Changing the CI workflows
+
+`tests/test_ci_workflows.py` holds the rules: every action pinned to a full
+commit hash with its version in a comment, a read-only token unless a job
+needs more, `persist-credentials: false` on checkout, nothing installed
+without `--require-hashes`, a time limit on every job. To add a test
+dependency, put it in `requirements-dev.txt` and regenerate
+`requirements-ci.txt` with the command in its header.
+
 ## Style
 
 - Imports at the top of the module (no inline imports).

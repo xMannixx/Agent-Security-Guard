@@ -271,6 +271,20 @@ including `test_availability.py`, passes unchanged.
     (`no_write_scope_active`, `short_confirmation`, ...), which the command
     line did not read at all. Such a file is an error now (exit 2, nothing on
     standard output), and the scope flags are applied.
+- **The CI workflows run with less and install only what was pinned.**
+  - No `permissions:` block: the token a job got had whatever the repository's
+    default grants. It is `contents: read` now, and the checkout no longer
+    leaves it in the working copy.
+  - Actions were referenced by tag (`actions/checkout@v4`), which whoever
+    controls the action's repository can move to other code. They are pinned
+    to commits, with the version in a comment for Dependabot.
+  - `pip install --upgrade pip pytest` installed whatever was newest that
+    day. CI installs from `requirements-ci.txt`, every package at one version
+    with hashes (`--require-hashes`).
+  - No static analysis. A CodeQL workflow analyzes the Python code and the
+    workflow files on every push, on pull requests and weekly.
+  - Jobs have a time limit, and a test keeps these rules from being lost in a
+    later edit.
 - **The memory bridge no longer trusts a source it has no entry for.** Only
   `tool`, `external` and `inference` counted as untrusted, so a preference
   "from `web`" was allowed. Anything but `observation` and `conversation` is
