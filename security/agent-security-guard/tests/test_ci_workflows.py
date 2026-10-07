@@ -81,6 +81,34 @@ def test_pinned_requirements_carry_a_hash_for_every_package():
             assert lines[index + 1].lstrip().startswith("--hash=sha256:"), line
 
 
+def _python_pytest_needs(major, minor):
+    if major >= 9:
+        return (3, 10)
+    return (3, 9) if (major, minor) >= (8, 4) else (3, 8)
+
+
+def test_pinned_pytest_is_one_the_python_it_is_for_can_run():
+    # An updater that reads the file line by line raised the pytest pinned for
+    # Python 3.9 to a release that needs 3.10. CI has no 3.9 job and was green.
+    lines = [line for line in _text(REPO_ROOT / "requirements-ci.txt").splitlines()
+             if line.startswith("pytest==")]
+    assert lines
+    for line in lines:
+        pin, _, marker = line.partition(";")
+        major, minor = (int(part) for part in pin.strip().split("==")[1].split(".")[:2])
+        from_python = re.search(r"python_full_version (?:==|>=) '3\.(\d+)", marker)
+        # a line without a lower bound is for everything down to the oldest
+        oldest = (3, int(from_python.group(1))) if from_python else (3, 8)
+        assert oldest >= _python_pytest_needs(major, minor), (
+            f"{pin.strip()} is pinned for Python {oldest[0]}.{oldest[1]}, which it does not run on"
+        )
+
+
+def test_no_updater_edits_the_pinned_requirements():
+    text = _text(REPO_ROOT / ".github" / "dependabot.yml")
+    assert not re.search(r'^\s*-\s*package-ecosystem:\s*"?pip"?', text, re.MULTILINE)
+
+
 def test_static_analysis_covers_the_code_and_the_workflows():
     text = _text(REPO_ROOT / ".github" / "workflows" / "codeql.yml")
     assert "github/codeql-action/init@" in text and "github/codeql-action/analyze@" in text

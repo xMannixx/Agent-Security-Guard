@@ -7,11 +7,8 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "ci"
-  # The package itself is stdlib-only. This is what CI installs to run the
-  # tests (requirements-ci.txt, pinned with hashes).
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "ci"
+  # The package itself is stdlib-only, so there is nothing for the "pip"
+  # updater to do. It is deliberately not pointed at requirements-ci.txt: that
+  # file pins a different pytest for each Python, and the updater raised the
+  # one for Python 3.9 to a release that needs 3.10. Regenerate the file with
+  # the command in its header instead.
