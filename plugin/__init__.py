@@ -469,16 +469,29 @@ def _extract_action(kwargs: Dict[str, Any]):
         args = _tool_args(kwargs)
         return AgentAction(
             kind=str(tool_name),
-            target=str(
-                args.get("target") or args.get("url") or args.get("path")
-                or args.get("file_path") or ""
-            ),
+            target=str(_first(args, _TARGET_KEYS) or ""),
             method=args.get("method"),
-            payload=args.get("payload"),
+            payload=_first(args, _PAYLOAD_KEYS),
             # The model writes the arguments; it must not get to say which
             # chain the call belongs to and so leave the one it is in.
             metadata={k: v for k, v in args.items() if k != "chain_id"},
         )
+    return None
+
+
+# The names tools give the thing they act on and the data they send. A secret
+# file read as `filename=.env`, or a secret posted as `body=...`, went unseen
+# while only `path` and `payload` were looked at. File contents (`content`) are
+# left out on purpose: they stay on the machine.
+_TARGET_KEYS = ("target", "url", "path", "file_path", "filename", "file")
+_PAYLOAD_KEYS = ("payload", "body", "data", "json")
+
+
+def _first(args: Dict[str, Any], keys) -> Any:
+    for key in keys:
+        value = args.get(key)
+        if value:
+            return value
     return None
 
 

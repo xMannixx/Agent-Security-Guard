@@ -99,16 +99,13 @@ def classify_action(
 
     # Generic HTTP request: let the method decide read vs write.
     if kind in _GENERIC_HTTP_KINDS:
-        return _classify_http(action)
+        return _read_tier_for_target(_classify_http(action), action.target)
 
     tier = _KIND_TIER.get(kind)
     if tier is None:
         tier = _host_tool_tier(kind)
     if tier is not None:
-        # A read of a remote URL is READ_ONLY; a read of a local path is LOCAL_READ.
-        if tier is ActionTier.LOCAL_READ and _is_remote(action.target):
-            return ActionTier.READ_ONLY
-        return tier
+        return _read_tier_for_target(tier, action.target)
 
     # For an unknown kind a write method makes it an external write. A read
     # method proves nothing: the host names the kind, but the model writes the
@@ -117,6 +114,17 @@ def classify_action(
         return ActionTier.EXTERNAL_WRITE
 
     return ActionTier.UNKNOWN
+
+
+def _read_tier_for_target(tier: ActionTier, target: str) -> ActionTier:
+    """Which kind of read it is follows from where the target lives, not from
+    the tool: a file read pointed at a URL reads the web, and a web fetch
+    pointed at a ``file:`` URL reads the local disk (and may read a secret)."""
+    if tier is ActionTier.LOCAL_READ and _is_remote(target):
+        return ActionTier.READ_ONLY
+    if tier is ActionTier.READ_ONLY and (target or "").strip().lower().startswith("file:"):
+        return ActionTier.LOCAL_READ
+    return tier
 
 
 def sends_to_remote(action: AgentAction) -> bool:

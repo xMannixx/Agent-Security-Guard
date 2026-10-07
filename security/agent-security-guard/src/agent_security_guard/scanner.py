@@ -66,6 +66,20 @@ def classify_content(
     )
 
 
+def secret_sensitivity(content: str, config: GuardConfig) -> DataSensitivity:
+    """``SECRET`` if the text matches a secret pattern, else ``PUBLIC``.
+
+    What the tool-call path needs to know about a request body. It runs the
+    secret patterns only: the injection and executable banks say nothing about
+    sensitivity, and they are the expensive ones on large inputs.
+    """
+    return (
+        DataSensitivity.SECRET
+        if _scan_secrets(content or "", config)
+        else DataSensitivity.PUBLIC
+    )
+
+
 def scan_input(
     content: str,
     source: str,
