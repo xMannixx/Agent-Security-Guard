@@ -18,6 +18,30 @@ def test_register_wires_both_hooks():
     assert "pre_tool_call" in ctx.hooks
 
 
+def test_register_wires_the_result_wrapper():
+    ctx = DummyCtx()
+    guard_plugin.register(ctx)
+    assert ctx.hooks["transform_tool_result"] is guard_plugin.wrap_tool_result
+
+
+def test_a_host_without_the_result_hook_keeps_the_other_two():
+    class PickyCtx(DummyCtx):
+        def register_hook(self, name, fn):
+            if name == "transform_tool_result":
+                raise ValueError("unknown hook")
+            super().register_hook(name, fn)
+
+    ctx = PickyCtx()
+    guard_plugin.register(ctx)
+    assert set(ctx.hooks) == {"pre_llm_call", "pre_tool_call"}
+
+
+def test_fallback_list_of_web_tools_matches_the_package():
+    from agent_security_guard.host_tools import UNTRUSTED_CONTENT_TOOLS
+
+    assert guard_plugin._UNTRUSTED_CONTENT_TOOLS == UNTRUSTED_CONTENT_TOOLS
+
+
 def test_status_available():
     status = guard_plugin.guard_status()
     assert status["available"] is True

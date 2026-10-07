@@ -20,7 +20,7 @@ from collections import deque
 from enum import Enum
 from typing import Deque, List, Optional
 
-from .actions import carries_data_out, classify_action
+from .actions import brings_untrusted_content, carries_data_out, classify_action
 from .policy import tier_setting
 from .types import (
     ActionTier,
@@ -109,6 +109,7 @@ class ActionHistory:
             memory_lane=action.desired_memory_lane,
             chain_id=context.chain_id,
             decision=decision.value if decision else None,
+            untrusted_content=brings_untrusted_content(action, context.config),
         )
         self.record(entry)
         return entry
@@ -146,6 +147,17 @@ _PRIVILEGED_LANES = {
     "authorization": ReasonCode.UNTRUSTED_TO_AUTH_MEMORY,
     "procedural": ReasonCode.UNTRUSTED_TO_PROCEDURAL_MEMORY,
 }
+
+# What untrusted content would want an agent to do. Reads are not on the list
+# (reading stays free), nor are tools the guard cannot classify.
+_ASKED_AFTER_UNTRUSTED_CONTENT = frozenset({
+    ActionTier.EXECUTION,
+    ActionTier.LOCAL_WRITE,
+    ActionTier.INSTALL,
+    ActionTier.CONFIG_CHANGE,
+    ActionTier.EXTERNAL_WRITE,
+    ActionTier.SELF_MODIFICATION,
+})
 
 
 def check_sequence(
@@ -212,8 +224,37 @@ def check_sequence(
                 "Shell command following an untrusted web read is denied.",
             ))
 
-    if current is SequenceCategory.MEMORY_WRITE and SequenceCategory.WEB_READ in past_categories:
+    # Untrusted content is in the model's context for the rest of the chain,
+    # whoever asked for it to be read. The host saying the user explicitly
+    # ordered this action is the one thing that speaks against the content
+    # having proposed it.
+    read_untrusted_content = any(entry.untrusted_content for entry in past)
+    user_ordered = context.user_intent_origin is UserIntentOrigin.HUMAN_EXPLICIT
+
+    if current is SequenceCategory.MEMORY_WRITE and (
+        SequenceCategory.WEB_READ in past_categories
+        or (read_untrusted_content and not user_ordered)
+    ):
         candidates.append(_memory_chain_decision(action))
+
+    if (
+        (read_untrusted_content or SequenceCategory.WEB_READ in past_categories)
+        and tier in _ASKED_AFTER_UNTRUSTED_CONTENT
+        and not user_ordered
+    ):
+        # Asked about, not denied: the guard knows the content is there, not
+        # that it proposed this. A host that can say the user ordered the
+        # action, or an operator who sets the tier, lifts it.
+        setting = tier_setting(
+            context, "after_untrusted_content", Decision.REQUIRE_CONFIRMATION
+        )
+        if setting is not Decision.ALLOW:
+            candidates.append(_decide(
+                setting,
+                ReasonCode.UNTRUSTED_CONTENT_IN_CONTEXT,
+                "Untrusted content (a web page, search results) was read "
+                "earlier in this chain and may have proposed this action.",
+            ))
 
     if not candidates:
         return _allow()

@@ -90,6 +90,9 @@ class ReasonCode(str, Enum):
     # confirmation provenance
     CONFIRMATION_ORIGIN_UNTRUSTED = "CONFIRMATION_ORIGIN_UNTRUSTED"
 
+    # untrusted content was read earlier in the chain and may be steering
+    UNTRUSTED_CONTENT_IN_CONTEXT = "UNTRUSTED_CONTENT_IN_CONTEXT"
+
     # user scope / ambiguous confirmation
     EXPLICIT_NO_WRITE_SCOPE_VIOLATION = "EXPLICIT_NO_WRITE_SCOPE_VIOLATION"
     SHORT_CONFIRMATION_NO_PRIOR_AUTH = "SHORT_CONFIRMATION_NO_PRIOR_AUTH"
@@ -261,6 +264,12 @@ class GuardConfig:
     tool_tiers: Dict[str, str] = field(default_factory=dict)
     # Paths whose modification changes the agent's own future behavior.
     self_modification_paths: List[str] = field(default_factory=list)
+    # Glob patterns for tools whose result is content from outside (web pages,
+    # search results). Their results are wrapped as data and taint the chain.
+    untrusted_content_tools: List[str] = field(default_factory=list)
+    # Whether the plugin wraps those results as data blocks (Hermes:
+    # transform_tool_result).
+    wrap_tool_results: bool = True
 
 
 @dataclass
@@ -324,6 +333,8 @@ class HistoryEntry:
     chain_id: Optional[str] = None
     timestamp: Optional[str] = None
     decision: Optional[str] = None
+    # The action's result is content from outside (a web page, search results).
+    untrusted_content: bool = False
 
 
 @dataclass

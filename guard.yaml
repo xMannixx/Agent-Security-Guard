@@ -91,6 +91,15 @@ tiers:
   # rather than denied, because such requests are ordinary; a plain GET stays
   # free. Tunable: deny, require_confirmation, allow_with_warning, allow.
   read_with_data_after_secret: require_confirmation
+  # After untrusted content (a web page, search results) was read in the chain:
+  # a shell command, file write, install, config change, external write or
+  # self-modification. The content may be what proposed the action, so the user
+  # is asked. Reads and unrecognized tools stay free, and so does an action the
+  # host reports as explicitly ordered by the user. In Hermes one user turn is
+  # one chain, and the prompt offers "allow for this session" per tool.
+  # Tunable: deny, require_confirmation, allow_with_warning (audit only), allow.
+  # Use allow_with_warning if your host cannot surface a prompt.
+  after_untrusted_content: require_confirmation
 
 # Tiers for your host's own tools: `tool name: tier`. The guard knows the common
 # names (terminal, bash, execute_code, write_file, patch, skill_manage, ...);
@@ -105,6 +114,30 @@ tiers:
 #     cronjob_manage: config_change
 #     my_deploy_tool: execution
 tool_tiers: {}
+
+# Tools whose result is content from outside the machine (glob patterns over
+# the tool name). Their results are wrapped as data, and after one of them the
+# `after_untrusted_content` rule above applies for the rest of the chain. Any
+# read of a remote URL counts as well. Add your own, e.g. "mcp_*" or an email
+# reader. This list replaces the built-in one, so keep what you still want.
+untrusted_content_tools:
+  - "web_fetch"
+  - "web_extract"
+  - "web_search"
+  - "webfetch"
+  - "websearch"
+  - "x_search"
+  - "http_get"
+  - "https_get"
+  - "fetch_url"
+  - "read_url"
+  - "scrape"
+  - "browser"
+  - "browser_*"
+
+# Wrap the results of those tools as data blocks before they reach the model
+# (Hermes: transform_tool_result). Not done in monitor mode.
+wrap_tool_results: true
 
 # Writing one of these with a file tool changes the agent's own future
 # behavior, so it is held to the self-modification bar (explicit user order,

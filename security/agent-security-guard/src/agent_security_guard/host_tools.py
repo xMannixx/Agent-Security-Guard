@@ -68,6 +68,17 @@ _INSTALL = (
     "install_skill", "install_plugin", "install_extension",
 )
 
+# Tools whose result is content from outside the machine: a web page, search
+# results, a browser snapshot. Glob patterns over the tool name. What such a
+# tool returns is data, whoever asked for it, and once it is in the model's
+# context it may be what proposes the next action. The operator's list
+# (``untrusted_content_tools`` in guard.yaml) replaces this one.
+UNTRUSTED_CONTENT_TOOLS = (
+    "web_fetch", "web_extract", "web_search", "webfetch", "websearch",
+    "x_search", "http_get", "https_get", "fetch_url", "read_url", "scrape",
+    "browser", "browser_*",
+)
+
 HOST_TOOL_TIER: Dict[str, ActionTier] = {
     **{name: ActionTier.EXECUTION for name in _EXECUTION},
     **{name: ActionTier.LOCAL_WRITE for name in _LOCAL_WRITE},

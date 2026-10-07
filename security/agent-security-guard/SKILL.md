@@ -72,6 +72,15 @@ are denied from untrusted content. Declare anything else in `tool_tiers`
 (`guard.yaml`). An unrecognized tool is allowed and audited, and denied when
 the host reports that untrusted content proposed it.
 
+## Content the agent read
+
+A web page the user asked for is still a page somebody else wrote. The results
+of web, search and browser tools (`untrusted_content_tools`) are wrapped as
+data-only blocks, and for the rest of the chain a shell command, file write,
+install, config change or external write asks for confirmation
+(`UNTRUSTED_CONTENT_IN_CONTEXT`). Reads stay free. In Hermes one user turn is
+one chain. `tiers.after_untrusted_content` tunes it.
+
 ## Status
 
 v0.3.0 fixes a critical over-blocking regression: 0.2.x denied nearly every

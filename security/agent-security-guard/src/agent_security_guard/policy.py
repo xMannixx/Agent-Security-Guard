@@ -21,6 +21,7 @@ from urllib.parse import urlsplit
 
 from . import _miniyaml
 from .actions import recognized_by_name_only, sends_to_remote
+from .host_tools import UNTRUSTED_CONTENT_TOOLS
 from .modes import MODE_STRICT, effective_mode, normalize_mode
 from .types import (
     ActionTier,
@@ -63,6 +64,12 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         # that has room for data (query string, credentials, body). Not a
         # denial, because such requests are common; a plain GET stays free.
         "read_with_data_after_secret": "require_confirmation",
+        # After untrusted content (a web page, search results) was read in the
+        # chain: a shell command, file write, install, config change, external
+        # write or self-modification. The content may be what proposed it, so
+        # the user is asked. Reads and unrecognized tools stay free, and so does
+        # an action the host reports as explicitly ordered by the user.
+        "after_untrusted_content": "require_confirmation",
         # What to do with an action kind the guard does not recognize. Blocking
         # here is what took hosts down in 0.2.x: an unknown *tool name* is not
         # evidence of danger. Only `strict` mode stops and asks.
@@ -88,6 +95,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # Writing these with a file tool changes the agent's own future behavior,
     # so it is held to the self-modification bar, not treated as a plain write.
     "self_modification_paths": ["SKILL.md", "guard.yaml"],
+    # Tools whose result is content from outside the machine (glob patterns).
+    "untrusted_content_tools": list(UNTRUSTED_CONTENT_TOOLS),
+    # The plugin wraps the results of those tools as data blocks.
+    "wrap_tool_results": True,
     # Only true secret material. Broad developer-file globs (*.db, *.log,
     # settings.json, config.py, ...) used to land here, which marked ordinary
     # project files as sensitive and then blocked every later external write
@@ -167,6 +178,11 @@ def load_config(path: Optional[str] = None) -> GuardConfig:
         scope_from_text=bool(merged.get("scope_from_text", False)),
         tool_tiers=_validated_tool_tiers(merged.get("tool_tiers")),
         self_modification_paths=list(merged.get("self_modification_paths") or []),
+        untrusted_content_tools=[
+            str(pattern).strip().lower()
+            for pattern in (merged.get("untrusted_content_tools") or [])
+        ],
+        wrap_tool_results=bool(merged.get("wrap_tool_results", True)),
     )
 
 
@@ -205,6 +221,8 @@ def _deep_copy_defaults() -> Dict[str, Any]:
         "scope_from_text": DEFAULT_CONFIG["scope_from_text"],
         "tool_tiers": dict(DEFAULT_CONFIG["tool_tiers"]),
         "self_modification_paths": list(DEFAULT_CONFIG["self_modification_paths"]),
+        "untrusted_content_tools": list(DEFAULT_CONFIG["untrusted_content_tools"]),
+        "wrap_tool_results": DEFAULT_CONFIG["wrap_tool_results"],
     }
 
 
