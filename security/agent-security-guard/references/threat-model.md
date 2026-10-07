@@ -75,6 +75,22 @@ What this does not do: tell the operator in the conversation. In a host that
 shows neither the log nor `config_error`, a refused file is noticed only by
 its settings not being in force.
 
+## A call the guard did not read
+
+The tool hook read a call as `tool_name` + `args`, the shape Hermes uses, or
+as `action=`. Called in any other shape it returned `None`, which every host
+takes for "no objection". A host that passes `name` and `input` therefore ran
+with a guard that looked at none of its calls and said nothing about it. The
+hook now reads the shapes hosts use (a model's tool-use block, a function
+call, the whole call as one mapping or object, positional arguments), and a
+call that still names no tool is logged, counted in `guard_status()`, blocked
+under `on_error: deny_all` and asked about in `strict` mode.
+
+By default it is still let through. The guard cannot tell a read from a write
+in a call it cannot read, and "block what you do not understand" is the rule
+that made 0.2.x unusable. So for a host with a shape nobody listed, the
+default protection is a line in the log and a counter, not a block.
+
 ## The guard's own code
 
 The plugin made the package importable by putting two directories at the front

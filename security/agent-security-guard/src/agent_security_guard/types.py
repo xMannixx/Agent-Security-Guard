@@ -131,6 +131,8 @@ class ReasonCode(str, Enum):
     MONITOR_MODE_ADVISORY = "MONITOR_MODE_ADVISORY"
     GUARD_DEGRADED_ALLOWED = "GUARD_DEGRADED_ALLOWED"
     GUARD_DEGRADED_DANGEROUS_KIND = "GUARD_DEGRADED_DANGEROUS_KIND"
+    # the host called the tool hook in a shape that names no tool
+    GUARD_UNREADABLE_CALL = "GUARD_UNREADABLE_CALL"
 
 
 class ActionTier(str, Enum):

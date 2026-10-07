@@ -155,6 +155,31 @@ through flagged `degraded`; with `on_error: deny_all` it blocks everything
 (`GUARD_UNAVAILABLE`). The input hook substitutes a degraded-but-safe wrapper
 instead of passing raw untrusted content through.
 
+### How a host hands over a tool call
+
+The tool hook reads the call in the shapes hosts use:
+
+| Shape | Example |
+|---|---|
+| Hermes | `tool_name="terminal", args={...}` |
+| a model's tool-use block | `name="terminal", input={...}` |
+| a function call | `function="terminal", arguments='{"command": ...}'` |
+| the whole call as one mapping or object | `tool_call={...}`, `tool_use={...}`, `function_call={...}` |
+| the guard's own vocabulary | `action={"kind": "shell", "target": ...}` |
+
+Arguments may be a mapping or JSON text; `tool_name` and `args` win where a
+call carries several.
+
+A call that names no tool in any of these shapes cannot be evaluated. The hook
+then returns `None` and the call runs, because the guard cannot tell a read
+from a write there and blocking what it cannot read is what took hosts down in
+0.2.x. It is not silent about it: the first call of each such shape is logged
+at error level ("NOT evaluated"), and `guard_status()["unreadable_calls"]`
+counts them. Check that number after wiring the plugin into a new host: if it
+is not zero, the guard is not looking at that host's calls. With
+`on_error: deny_all` such a call is blocked, and in `strict` mode it goes to
+the approval prompt (`GUARD_UNREADABLE_CALL`).
+
 ### What the plugin does in Hermes
 
 Checked against the Hermes plugin dispatcher (`hermes_cli/plugins.py`); not run
