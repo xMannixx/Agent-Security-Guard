@@ -199,6 +199,125 @@ def test_memory_observation_to_authorization_allowed():
     assert d.decision is Decision.ALLOW
 
 
+def _memory(lane, source=None, **context):
+    action = AgentAction(kind="memory_write", desired_memory_lane=lane, memory_source=source)
+    return decide_action(action, ActionTier.MEMORY_WRITE, ctx(**context))
+
+
+@pytest.mark.parametrize("lane", ["authorization", "procedural"])
+@pytest.mark.parametrize("origin", [OriginTrust.TRUSTED_USER, OriginTrust.UNSPECIFIED])
+def test_privileged_memory_without_a_source_is_asked_about(lane, origin):
+    d = _memory(lane, origin_trust=origin)
+    assert d.decision is Decision.REQUIRE_CONFIRMATION
+    assert d.reason_code is ReasonCode.PRIVILEGED_MEMORY_REQUIRES_CONFIRMATION
+    assert d.audit_required is True
+
+
+def test_privileged_memory_from_observation_is_audited():
+    d = _memory("authorization", "observation", origin_trust=OriginTrust.TRUSTED_USER)
+    assert d.decision is Decision.ALLOW
+    assert d.audit_required is True
+
+
+@pytest.mark.parametrize("setting,expected", [
+    ("deny", Decision.DENY),
+    ("allow_with_warning", Decision.ALLOW_WITH_WARNING),
+    ("allow", Decision.ALLOW),
+])
+def test_operator_can_tune_the_unsourced_privileged_write(setting, expected):
+    config = load_config(None)
+    config.tiers["memory_unsourced_to_privileged"] = setting
+    d = _memory("procedural", origin_trust=OriginTrust.TRUSTED_USER, config=config)
+    assert d.decision is expected
+    assert d.audit_required is True
+
+
+@pytest.mark.parametrize("lane", [
+    "auth", "Auth", "authz", "authorisation", "permissions", "grants",
+    "authorization-lane", "auth_memory", '["authorization"]', "\u200bauthorization\u200b",
+])
+def test_other_names_for_the_authorization_lane_are_denied(lane):
+    d = _memory(lane, "external", origin_trust=OriginTrust.EXTERNAL_WEB)
+    assert d.decision is Decision.DENY
+    assert d.reason_code is ReasonCode.UNTRUSTED_TO_AUTH_MEMORY
+
+
+@pytest.mark.parametrize("lane", [
+    "rules", "rule", "system", "policy", "instructions", " PROCEDURAL ",
+    "procedural lane", "system-prompt",
+])
+def test_other_names_for_the_procedural_lane_are_denied(lane):
+    d = _memory(lane, "tool", origin_trust=OriginTrust.TOOL_OUTPUT)
+    assert d.decision is Decision.DENY
+    assert d.reason_code is ReasonCode.UNTRUSTED_TO_PROCEDURAL_MEMORY
+
+
+@pytest.mark.parametrize("lane", ["core", "admin", "trusted", "auth0rization", "", None])
+@pytest.mark.parametrize("context", [
+    dict(origin_trust=OriginTrust.EXTERNAL_WEB),
+    dict(origin_trust=OriginTrust.TRUSTED_USER,
+         user_intent_origin=UserIntentOrigin.UNTRUSTED_SUGGESTION),
+])
+def test_a_lane_the_guard_cannot_read_is_not_taken_for_evidence(lane, context):
+    d = _memory(lane, **context)
+    assert d.decision is Decision.DENY
+    assert d.reason_code is ReasonCode.UNTRUSTED_TO_UNKNOWN_MEMORY_LANE
+
+
+@pytest.mark.parametrize("lane", ["notes", None])
+def test_unreadable_lane_on_a_trusted_origin_is_allowed_and_audited(lane):
+    d = _memory(lane, origin_trust=OriginTrust.TRUSTED_USER)
+    assert d.decision is Decision.ALLOW_WITH_WARNING
+    assert d.reason_code is ReasonCode.UNKNOWN_MEMORY_LANE_AUDITED
+    assert d.audit_required is True
+
+
+def test_operator_can_tune_the_unknown_lane_denial():
+    config = load_config(None)
+    config.tiers["memory_external_to_unknown_lane"] = "require_confirmation"
+    d = _memory("core", "external", origin_trust=OriginTrust.EXTERNAL_WEB, config=config)
+    assert d.decision is Decision.REQUIRE_CONFIRMATION
+    assert d.reason_code is ReasonCode.UNTRUSTED_TO_UNKNOWN_MEMORY_LANE
+
+
+def test_untrusted_source_alone_does_not_get_an_unnamed_lane():
+    d = _memory(None, "external", origin_trust=OriginTrust.TRUSTED_USER)
+    assert d.decision is Decision.DENY
+    assert d.reason_code is ReasonCode.UNTRUSTED_TO_UNKNOWN_MEMORY_LANE
+
+
+def test_untrusted_preference_is_asked_about():
+    d = _memory("preference", "external", origin_trust=OriginTrust.EXTERNAL_WEB)
+    assert d.decision is Decision.REQUIRE_CONFIRMATION
+    assert d.reason_code is ReasonCode.UNTRUSTED_TO_PREFERENCE_MEMORY
+
+
+def test_conversation_cannot_write_a_privileged_lane():
+    d = _memory("authorization", "conversation", origin_trust=OriginTrust.TRUSTED_USER)
+    assert d.decision is Decision.DENY
+    assert d.reason_code is ReasonCode.UNTRUSTED_TO_AUTH_MEMORY
+
+
+def test_operator_declares_the_hosts_own_lane_names(tmp_path):
+    path = tmp_path / "guard.yaml"
+    path.write_text(
+        "memory_lanes:\n  Notes: evidence\n  perms: authorization\n", encoding="utf-8"
+    )
+    config = load_config(str(path))
+    assert config.memory_lanes == {"notes": "evidence", "perms": "authorization"}
+    web = dict(origin_trust=OriginTrust.EXTERNAL_WEB, config=config)
+    assert _memory("notes", "external", **web).reason_code is ReasonCode.UNTRUSTED_TO_EVIDENCE_MEMORY
+    assert _memory("perms", "external", **web).reason_code is ReasonCode.UNTRUSTED_TO_AUTH_MEMORY
+
+
+@pytest.mark.parametrize("line", ["notes: evidense", "authorization: evidence"])
+def test_memory_lanes_typo_or_redefinition_raises(tmp_path, line):
+    path = tmp_path / "guard.yaml"
+    path.write_text(f"memory_lanes:\n  {line}\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_config(str(path))
+
+
 # --------------------------------------------------------------------------- #
 # Unknown tier fails safe
 # --------------------------------------------------------------------------- #

@@ -69,7 +69,14 @@ class ReasonCode(str, Enum):
     UNTRUSTED_TO_AUTH_MEMORY = "UNTRUSTED_TO_AUTH_MEMORY"
     UNTRUSTED_TO_PROCEDURAL_MEMORY = "UNTRUSTED_TO_PROCEDURAL_MEMORY"
     UNTRUSTED_TO_IDENTITY_MEMORY = "UNTRUSTED_TO_IDENTITY_MEMORY"
+    UNTRUSTED_TO_PREFERENCE_MEMORY = "UNTRUSTED_TO_PREFERENCE_MEMORY"
     UNTRUSTED_TO_EVIDENCE_MEMORY = "UNTRUSTED_TO_EVIDENCE_MEMORY"
+    # a write that names no lane, or one the guard cannot read
+    UNTRUSTED_TO_UNKNOWN_MEMORY_LANE = "UNTRUSTED_TO_UNKNOWN_MEMORY_LANE"
+    UNKNOWN_MEMORY_LANE_AUDITED = "UNKNOWN_MEMORY_LANE_AUDITED"
+    # authorization / procedural on a trusted origin
+    PRIVILEGED_MEMORY_REQUIRES_CONFIRMATION = "PRIVILEGED_MEMORY_REQUIRES_CONFIRMATION"
+    PRIVILEGED_MEMORY_AUDITED = "PRIVILEGED_MEMORY_AUDITED"
 
     # downloads
     DOWNLOAD_THEN_EXECUTE = "DOWNLOAD_THEN_EXECUTE"
@@ -270,6 +277,8 @@ class GuardConfig:
     # Whether the plugin wraps those results as data blocks (Hermes:
     # transform_tool_result).
     wrap_tool_results: bool = True
+    # Operator-declared memory lane names: {lane name: one of the five lanes}.
+    memory_lanes: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass

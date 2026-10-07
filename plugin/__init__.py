@@ -14,6 +14,9 @@ Host contract (kwargs are best-effort; unknown shapes are ignored):
 - planned action: ``action={kind,target,method,...}`` (or ``tool_name``+``args``)
   plus optional provenance ``origin_trust``, ``data_sensitivity``,
   ``user_intent_origin``, ``chain_id``.
+- memory write: the lane and the source, as ``desired_memory_lane`` /
+  ``memory_source`` in ``action``, or in ``args`` under the names memory tools
+  use (``lane``, ``memory_lane``, ``source``).
 
 What Hermes actually sends and reads (checked against its plugin dispatcher):
 - ``pre_tool_call`` gets ``tool_name``, ``args`` and ids (``session_id``,
@@ -315,6 +318,9 @@ def guard_tool_call(**kwargs) -> Optional[Dict[str, Any]]:
 _NEEDS_USER_ORDER = frozenset({"SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER"})
 
 
+_APPROVED_PER_CALL = ("SELF_MODIFICATION", "PRIVILEGED_MEMORY")
+
+
 def _with_host_directive(
     payload: Dict[str, Any],
     fingerprint: str,
@@ -342,12 +348,13 @@ def _with_host_directive(
         trusted_origin and reason in _NEEDS_USER_ORDER
     ):
         payload["action"] = "approve"
-        # Hermes offers "always allow" per rule_key. For a self-modification the
-        # key is tied to the exact call, so one approval cannot cover a
-        # different patch later. Other confirmations are keyed by reason and
-        # tool, so the user can settle "terminal after web content" once for
-        # the session instead of at every command.
-        scope = fingerprint if reason.startswith("SELF_MODIFICATION") else kind
+        # Hermes offers "always allow" per rule_key. For a self-modification
+        # and for a write to privileged memory the key is tied to the exact
+        # call, so one approval cannot cover a different patch or a different
+        # rule later. Other confirmations are keyed by reason and tool, so the
+        # user can settle "terminal after web content" once for the session
+        # instead of at every command.
+        scope = fingerprint if reason.startswith(_APPROVED_PER_CALL) else kind
         payload["rule_key"] = f"agent-security-guard:{reason}:{scope}"
     else:
         payload["action"] = "block"
@@ -578,6 +585,8 @@ def _extract_action(kwargs: Dict[str, Any]):
             target=str(_first(args, _TARGET_KEYS) or ""),
             method=args.get("method"),
             payload=_first(args, _PAYLOAD_KEYS),
+            desired_memory_lane=_stated_lane(args),
+            memory_source=_stated_source(args),
             # The model writes the arguments; it must not get to say which
             # chain the call belongs to and so leave the one it is in.
             metadata={k: v for k, v in args.items() if k != "chain_id"},
@@ -591,6 +600,44 @@ def _extract_action(kwargs: Dict[str, Any]):
 # left out on purpose: they stay on the machine.
 _TARGET_KEYS = ("target", "url", "path", "file_path", "filename", "file")
 _PAYLOAD_KEYS = ("payload", "body", "data", "json")
+
+
+# How memory tools name the lane a write goes to and where the fact is from.
+# Without these a host tool's `lane: authorization` never reached the lane
+# rules, and the write was judged as one that names no lane.
+_MEMORY_LANE_KEYS = ("desired_memory_lane", "memory_lane", "lane")
+_MEMORY_SOURCE_KEYS = ("memory_source", "source")
+# The model writes the arguments. It may call a fact less trustworthy than it
+# looks, but "observation" from its pen is not the user's word.
+_SOURCES_A_MODEL_CANNOT_VOUCH_FOR = ("observation", "conversation")
+
+
+def _stated_lane(args: Dict[str, Any]) -> Any:
+    """The lane a memory tool call names, or None.
+
+    Two different lanes in one call are handed on together, which the guard
+    reads as a lane it does not know: it cannot tell which one the tool uses,
+    and `lane: authorization` next to `memory_lane: evidence` must not pass as
+    the harmless one.
+    """
+    lanes: List[Any] = []
+    for key in _MEMORY_LANE_KEYS:
+        value = args.get(key)
+        if value and value not in lanes:
+            lanes.append(value)
+    if len(lanes) > 1:
+        return " | ".join(str(lane) for lane in lanes)
+    return lanes[0] if lanes else None
+
+
+def _stated_source(args: Dict[str, Any]) -> Any:
+    source = _first(args, _MEMORY_SOURCE_KEYS)
+    if (
+        isinstance(source, str)
+        and source.strip().lower() in _SOURCES_A_MODEL_CANNOT_VOUCH_FOR
+    ):
+        return None
+    return source
 
 
 def _first(args: Dict[str, Any], keys) -> Any:

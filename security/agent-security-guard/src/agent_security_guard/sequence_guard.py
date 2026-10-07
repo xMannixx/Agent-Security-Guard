@@ -21,6 +21,13 @@ from enum import Enum
 from typing import Deque, List, Optional
 
 from .actions import brings_untrusted_content, carries_data_out, classify_action
+from .memory_lanes import (
+    NO_LANE,
+    PERSONAL_LANES,
+    PRIVILEGED_LANES,
+    UNKNOWN_LANE,
+    read_lane,
+)
 from .policy import tier_setting
 from .types import (
     ActionTier,
@@ -143,11 +150,6 @@ _RISK_BY_DECISION = {
     Decision.DENY: 0.9,
 }
 
-_PRIVILEGED_LANES = {
-    "authorization": ReasonCode.UNTRUSTED_TO_AUTH_MEMORY,
-    "procedural": ReasonCode.UNTRUSTED_TO_PROCEDURAL_MEMORY,
-}
-
 # What untrusted content would want an agent to do. Reads are not on the list
 # (reading stays free), nor are tools the guard cannot classify.
 _ASKED_AFTER_UNTRUSTED_CONTENT = frozenset({
@@ -231,15 +233,24 @@ def check_sequence(
     read_untrusted_content = any(entry.untrusted_content for entry in past)
     user_ordered = context.user_intent_origin is UserIntentOrigin.HUMAN_EXPLICIT
 
+    # A memory write that names no lane the guard can read is not presumed to
+    # be evidence; after outside content it is asked about like any other
+    # state change.
+    lane = (
+        read_lane(action.desired_memory_lane, context.config)
+        if current is SequenceCategory.MEMORY_WRITE
+        else None
+    )
+
     if current is SequenceCategory.MEMORY_WRITE and (
         SequenceCategory.WEB_READ in past_categories
         or (read_untrusted_content and not user_ordered)
     ):
-        candidates.append(_memory_chain_decision(action))
+        candidates.append(_memory_chain_decision(lane))
 
     if (
         (read_untrusted_content or SequenceCategory.WEB_READ in past_categories)
-        and tier in _ASKED_AFTER_UNTRUSTED_CONTENT
+        and (tier in _ASKED_AFTER_UNTRUSTED_CONTENT or lane in (NO_LANE, UNKNOWN_LANE))
         and not user_ordered
     ):
         # Asked about, not denied: the guard knows the content is there, not
@@ -273,23 +284,29 @@ def entry_category(entry: HistoryEntry) -> SequenceCategory:
     return derive_category(entry.tier, entry.origin_trust, entry.data_sensitivity)
 
 
-def _memory_chain_decision(action: AgentAction) -> GuardDecision:
-    lane = (action.desired_memory_lane or "evidence").strip().lower()
-    if lane in _PRIVILEGED_LANES:
+def _memory_chain_decision(lane: str) -> GuardDecision:
+    if lane in PRIVILEGED_LANES:
         return _deny(
-            _PRIVILEGED_LANES[lane],
+            PRIVILEGED_LANES[lane],
             f"Untrusted web content cannot promote to '{lane}' memory.",
         )
-    if lane == "identity":
+    if lane in PERSONAL_LANES:
         return _decide(
             Decision.REQUIRE_CONFIRMATION,
-            ReasonCode.UNTRUSTED_TO_IDENTITY_MEMORY,
-            "Writing identity memory after an untrusted web read needs confirmation.",
+            PERSONAL_LANES[lane],
+            f"Writing {lane} memory after an untrusted web read needs confirmation.",
+        )
+    if lane in (NO_LANE, UNKNOWN_LANE):
+        return _decide(
+            Decision.ALLOW_WITH_WARNING,
+            ReasonCode.UNKNOWN_MEMORY_LANE_AUDITED,
+            "Memory write after an untrusted web read names no lane the guard "
+            "knows; audited.",
         )
     return _decide(
         Decision.ALLOW_WITH_WARNING,
         ReasonCode.UNTRUSTED_TO_EVIDENCE_MEMORY,
-        "Memory write after an untrusted web read is quarantined to evidence.",
+        "Evidence memory write after an untrusted web read; allowed and audited.",
     )
 
 

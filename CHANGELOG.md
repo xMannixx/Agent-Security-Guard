@@ -91,6 +91,35 @@ including `test_availability.py`, passes unchanged.
   (`UNTRUSTED_TO_UNKNOWN_ACTION`, when the host reports
   `user_intent_origin=untrusted_suggestion`). Tunable with
   `tiers.unknown_action_from_untrusted`.
+- **A permission or a rule can no longer be written to memory under another
+  lane name.** The lane was compared to an exact list, kept in three places, so
+  a write to `auth`, `rules` or `system` was none of the privileged lanes. It
+  was allowed with the message "quarantined to evidence" while it went to the
+  lane it asked for. The lane is now read in one place: other spellings of
+  `authorization` and `procedural` are denied from untrusted sources like the
+  names themselves, in the policy, the sequence guard and the memory bridge.
+- **A memory write that names no lane is no longer taken for evidence.** No
+  lane, or a name the guard cannot read, is denied from an untrusted source
+  (`UNTRUSTED_TO_UNKNOWN_MEMORY_LANE`, `tiers.memory_external_to_unknown_lane`)
+  and asked about once outside content was read in the chain.
+- **Leaving the source out no longer opens the privileged lanes.** A write to
+  `authorization` or `procedural` memory with no `memory_source`, on a trusted
+  or unspecified origin, was a plain allow and left no audit record. The user
+  is asked now (`PRIVILEGED_MEMORY_REQUIRES_CONFIRMATION`,
+  `tiers.memory_unsourced_to_privileged`), and such a write from `observation`
+  is audited.
+- **The lane of a host's memory tool reaches the rules.** For a call that
+  arrives as `tool_name` + `args`, as Hermes sends it, the plugin dropped the
+  lane and the source, so every such write was judged as an evidence write. It
+  reads them now (`lane`, `memory_lane`, `desired_memory_lane`; `source`,
+  `memory_source`). A source in the arguments is the model's own claim:
+  `observation` there unlocks nothing, and two different lanes in one call do
+  not pass as the harmless one. In Hermes an approval of a privileged memory
+  write covers that exact write only.
+- **The memory bridge no longer trusts a source it has no entry for.** Only
+  `tool`, `external` and `inference` counted as untrusted, so a preference
+  "from `web`" was allowed. Anything but `observation` and `conversation` is
+  untrusted now.
 
 ### Changed
 
@@ -112,6 +141,17 @@ including `test_availability.py`, passes unchanged.
   host passes no chain of its own, which also keeps sessions apart.
 - With `scope_from_text`, the plugin reads the no-write scope from the user
   message Hermes gives `pre_llm_call`; only the two resulting flags are kept.
+- **Untrusted content writing `preference` memory is asked about**
+  (`UNTRUSTED_TO_PREFERENCE_MEMORY`), like `identity`. It was allowed with a
+  warning that claimed a quarantine nothing carried out.
+- **`memory_source: conversation` may write `identity`, `preference` and
+  `evidence` without a prompt** on a trusted origin, as the memory bridge
+  already advised. The policy counted every source but `observation` as
+  untrusted, so stating where a fact came from made the write stricter than
+  stating nothing. The privileged lanes still take `observation` only.
+- A memory write that names no lane, or one the guard does not know, is
+  `allow_with_warning` on a trusted origin (`UNKNOWN_MEMORY_LANE_AUDITED`)
+  where it was a plain, unaudited `allow`.
 - **Recognizing a host tool does not gate it more.** On a trusted or
   unspecified origin with nothing pointing at danger, `terminal`, `write_file`
   and the like are allowed and audited as they were while unrecognized
@@ -138,6 +178,12 @@ including `test_availability.py`, passes unchanged.
 - `guard_status()` reports `config_error`, `mode`, and `mode_source`.
 - `tool_tiers` in guard.yaml: declare the tier of your host's own tools. Wins
   over the built-in tables; a misspelled tier fails loudly.
+- `memory_lanes` in guard.yaml: map your memory's own lane names to the lane
+  they amount to. A misspelled lane fails loudly, and the five built-in lanes
+  cannot be redefined.
+- Hermes' `memory` tool can be put under the memory rules with
+  `tool_tiers: {memory: memory_write}`. It stays an unrecognized tool by
+  default (allowed and audited, also after a web page was read).
 - `self_modification_paths`, and the tier settings `local_write`,
   `recognized_host_tool`, `unknown_action_from_untrusted`.
 - `normalize_action`, `mode_with_source`, `GuardAdapter.mode_source`,

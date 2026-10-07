@@ -679,3 +679,83 @@ def test_monitor_mode_and_the_switch_leave_results_alone(isolated_plugin, monkey
     monkeypatch.setattr(adapter.config, "wrap_tool_results", True)
     monkeypatch.setattr(adapter, "_mode", MODE_MONITOR)
     assert isolated_plugin.wrap_tool_result(tool_name="web_extract", args={}, result="x") is None
+
+
+# --------------------------------------------------------------------------- #
+# 12. The memory lane rules must not get in the way of remembering
+# --------------------------------------------------------------------------- #
+
+
+def _memory_write(lane, source=None, context=None, config=None):
+    action = AgentAction(kind="memory_write", desired_memory_lane=lane, memory_source=source)
+    return GuardAdapter(config=config).guard_action(
+        action, context or GuardContext(origin_trust=OriginTrust.TRUSTED_USER)
+    )
+
+
+@pytest.mark.parametrize("source", ["tool", "external", "inference"])
+def test_storing_a_found_fact_as_evidence_stays_allowed(source):
+    decision = _memory_write("evidence", source)
+    assert decision.decision in (Decision.ALLOW, Decision.ALLOW_WITH_WARNING), decision
+
+
+@pytest.mark.parametrize("lane", ["identity", "preference", "evidence"])
+@pytest.mark.parametrize("source", ["conversation", "observation", None])
+def test_what_the_user_says_about_themselves_is_stored_without_a_prompt(lane, source):
+    assert _memory_write(lane, source).decision is Decision.ALLOW
+
+
+@pytest.mark.parametrize("lane", ["notes", "project", "episodic", "lessons", None])
+@pytest.mark.parametrize("origin", [OriginTrust.TRUSTED_USER, OriginTrust.UNSPECIFIED])
+def test_a_hosts_own_lane_names_work_on_a_trusted_origin(lane, origin):
+    decision = _memory_write(lane, context=GuardContext(origin_trust=origin))
+    assert decision.decision in (Decision.ALLOW, Decision.ALLOW_WITH_WARNING), decision
+
+
+def test_observed_permission_is_stored_without_a_prompt():
+    assert _memory_write("authorization", "observation").decision is Decision.ALLOW
+
+
+def test_memory_tool_passed_by_name_with_a_lane_works(isolated_plugin):
+    payload = isolated_plugin.guard_tool_call(
+        tool_name="memory_write",
+        args={"lane": "preference", "source": "conversation", "content": "answers in German"},
+    )
+    assert payload["allowed"] is True, payload
+
+
+def _declared_memory_tool(**tiers):
+    config = load_config(None)
+    config.tool_tiers = {"memory": "memory_write"}
+    config.tiers.update(tiers)
+    return config
+
+
+HERMES_MEMORY_CALL = AgentAction(kind="memory", target="user", metadata={"action": "add"})
+
+
+@pytest.mark.parametrize("origin", [OriginTrust.TRUSTED_USER, OriginTrust.UNSPECIFIED])
+def test_declared_memory_tool_works_on_a_clean_chain(origin):
+    config = _declared_memory_tool()
+    decision = GuardAdapter(config=config).guard_action(
+        HERMES_MEMORY_CALL, GuardContext(origin_trust=origin, config=config)
+    )
+    assert decision.decision in (Decision.ALLOW, Decision.ALLOW_WITH_WARNING), decision
+
+
+def test_declared_memory_tool_the_user_ordered_is_not_asked_about_after_a_web_read():
+    config = _declared_memory_tool()
+    context = GuardContext(
+        origin_trust=OriginTrust.TRUSTED_USER,
+        user_intent_origin=UserIntentOrigin.HUMAN_EXPLICIT,
+        config=config,
+    )
+    decision = _after_web_read(HERMES_MEMORY_CALL, context, config)
+    assert decision.decision in (Decision.ALLOW, Decision.ALLOW_WITH_WARNING), decision
+
+
+def test_operator_can_reduce_the_memory_ask_to_an_audit_record():
+    config = _declared_memory_tool(after_untrusted_content="allow_with_warning")
+    context = GuardContext(origin_trust=OriginTrust.TRUSTED_USER, config=config)
+    decision = _after_web_read(HERMES_MEMORY_CALL, context, config)
+    assert decision.decision is Decision.ALLOW_WITH_WARNING
