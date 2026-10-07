@@ -126,6 +126,45 @@ through flagged `degraded`; with `on_error: deny_all` it blocks everything
 (`GUARD_UNAVAILABLE`). The input hook substitutes a degraded-but-safe wrapper
 instead of passing raw untrusted content through.
 
+### What the plugin does in Hermes
+
+Checked against the Hermes plugin dispatcher (`hermes_cli/plugins.py`); not run
+inside a live Hermes.
+
+Hermes calls `pre_tool_call` with `tool_name`, `args` and ids (`session_id`,
+`turn_id`, ...). Of the result it reads only `action`: `block` vetoes the call
+and returns `message` to the model as the tool result, `approve` sends the call
+to the human-approval gate (CLI prompt or gateway; it fails closed when nobody
+can answer). A result without `action` is ignored. The plugin therefore adds:
+
+| Guard decision | `action` | In Hermes |
+|---|---|---|
+| `allow`, `allow_with_warning` | none | tool runs |
+| `require_confirmation` | `approve` | user is asked |
+| `deny` | `block` | call is vetoed |
+| `deny` because the explicit user order for a self-modification is missing, and nothing untrusted proposed the call | `approve` | user is asked |
+
+The last row exists because Hermes cannot tell the guard who asked for a
+change. Its approval prompt is the explicit order the rule is missing; blocking
+instead would make skill changes impossible even when you ask for them. Hermes
+offers "always allow" per `rule_key`, so the key is bound to the exact call and
+one approval does not cover a different patch. `approve` needs a Hermes version
+with plugin approvals; an older one ignores it.
+
+What acts in Hermes, and what cannot:
+
+- **Acts:** the self-modification bar (`skill_manage`, file tools on `SKILL.md`
+  or `guard.yaml`), the secret-read then external-write chain (one Hermes turn
+  is one chain), secret payloads in external writes, the block on
+  state-changing tools while the guard cannot evaluate, and, if you set
+  `scope_from_text: true`, the no-write scope read from your message.
+- **Cannot act:** every rule that depends on where an action came from
+  ("untrusted content cannot run a shell", "cannot write files"). Hermes passes
+  the hook no provenance, and the plugin does not invent any.
+- **Not wired:** wrapping web and tool content as data. Hermes gives
+  `pre_llm_call` the user's message, not the content its tools fetched, so that
+  hook has nothing to wrap.
+
 ### Where the plugin reads its policy
 
 The plugin loads the first `guard.yaml` it finds in:

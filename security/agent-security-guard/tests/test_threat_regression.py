@@ -489,3 +489,14 @@ def test_engine_failure_blocks_host_shell_and_file_tools(monkeypatch, tool):
     payload = guard_plugin.guard_tool_call(tool_name=tool, args={"path": "a.txt"})
     assert payload["block"] is True
     assert payload["reason_code"] == "GUARD_DEGRADED_DANGEROUS_KIND"
+
+
+def test_denial_reaches_hermes_in_the_form_it_acts_on(isolated_plugin, hermes_reads):
+    # Hermes reads only `action`. The plugin used to answer with `decision` and
+    # `block`, which Hermes ignores: every denial was computed and then not
+    # enforced.
+    result = isolated_plugin.guard_tool_call(
+        tool_name="write_file", args={"path": "~/.bashrc"}, origin_trust="external_web"
+    )
+    assert result["decision"] == "deny"
+    assert hermes_reads(result) == "block"

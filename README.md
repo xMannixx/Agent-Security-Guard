@@ -210,6 +210,16 @@ accidentally fail open:
 - `allowed` — `true` only for `allow` / `allow_with_warning`.
 - `requires_confirmation` — `true` when the action needs genuine human
   authorization before proceeding.
+- `action` — the directive Hermes acts on, present on every non-allow outcome:
+  `block` for a denial, `approve` for a confirmation (Hermes then asks the
+  user), with a `rule_key` bound to the exact call. Hermes reads this field and
+  nothing else from a hook result; without it the decision was ignored there.
+
+Hermes passes the hook no provenance, so in Hermes the rules that need none are
+the ones that act: self-modification goes to the approval prompt, a secret read
+followed by an external write in the same turn is blocked, and a failing guard
+blocks state-changing tools. See
+[docs/INSTALLATION.md](docs/INSTALLATION.md#what-the-plugin-does-in-hermes).
 
 Neither hook lets a failure of the guard pass as approval. If the engine is
 unavailable or raises, `pre_tool_call` blocks state-changing and dangerous

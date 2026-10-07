@@ -490,3 +490,11 @@ def test_operator_can_overrule_a_name_the_guard_reads_wrongly():
         GuardContext(origin_trust=OriginTrust.EXTERNAL_WEB, config=config),
     )
     assert decision.decision is Decision.ALLOW
+
+
+@pytest.mark.parametrize("tool", HOST_TOOL_NAMES + HOST_WORK_TOOLS)
+def test_allowed_calls_carry_no_directive_for_the_host(tool, hermes_reads):
+    # Hermes blocks or prompts on `action`; ordinary work must never carry one.
+    payload = guard_plugin.guard_tool_call(tool_name=tool, args={"path": "notes.md"})
+    assert "action" not in payload
+    assert hermes_reads(payload) is None
