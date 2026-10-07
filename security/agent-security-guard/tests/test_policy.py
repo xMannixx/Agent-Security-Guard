@@ -16,6 +16,7 @@ from agent_security_guard import (
     load_config,
     path_is_sensitive,
 )
+from secret_samples import CREDENTIAL_FILES, FILES_THAT_ONLY_SOUND_SECRET
 
 
 def ctx(**kwargs) -> GuardContext:
@@ -387,6 +388,18 @@ def test_ordinary_developer_files_are_not_sensitive(path):
     assert path_is_sensitive(path, cfg.sensitive_paths) is False
 
 
+@pytest.mark.parametrize("path", CREDENTIAL_FILES)
+def test_credential_files_are_sensitive(path):
+    cfg = load_config()
+    assert path_is_sensitive(path, cfg.sensitive_paths) is True
+
+
+@pytest.mark.parametrize("path", FILES_THAT_ONLY_SOUND_SECRET)
+def test_files_that_only_sound_like_credentials_are_not_sensitive(path):
+    cfg = load_config()
+    assert path_is_sensitive(path, cfg.sensitive_paths) is False
+
+
 @pytest.mark.parametrize("path", [
     "/home/u/proj/main.py",
     "README.md",
@@ -426,6 +439,20 @@ def test_load_real_guard_yaml():
     assert ".env" in cfg.sensitive_paths
     assert cfg.audit["backend"] == "sqlite"
     assert cfg.limits["max_content_chars"] == 20000
+
+
+def test_shipped_guard_yaml_lists_what_the_defaults_list():
+    # A list in guard.yaml replaces the built-in one, so a shipped file that
+    # falls behind would take detectors away from everyone who installs it.
+    repo_root = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "..")
+    )
+    shipped = load_config(os.path.join(repo_root, "guard.yaml"))
+    defaults = load_config(None)
+    assert shipped.secret_patterns == defaults.secret_patterns
+    assert shipped.sensitive_paths == defaults.sensitive_paths
+    assert shipped.untrusted_content_tools == defaults.untrusted_content_tools
+    assert shipped.self_modification_paths == defaults.self_modification_paths
 
 
 def test_malformed_config_raises(tmp_path):

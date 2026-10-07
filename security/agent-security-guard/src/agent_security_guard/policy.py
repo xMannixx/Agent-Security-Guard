@@ -129,24 +129,48 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # via the exfiltration chain. Add project-specific paths deliberately.
     "sensitive_paths": [
         ".env", ".env.*", "*.pem", "*.key", "*.p12", "*.pfx",
-        "*.kdbx", "id_rsa", "id_rsa.*", ".ssh/", ".aws/",
-        ".gcp/", ".azure/", ".kube/", ".npmrc", ".pypirc", ".netrc",
-        ".git-credentials", "secrets.*", "credentials.*",
+        "*.kdbx", "id_rsa", "id_rsa.*", "id_ed25519", "id_ed25519_sk",
+        "id_ecdsa", "id_ecdsa_sk", "id_dsa", ".ssh/", ".aws/",
+        ".gcp/", ".azure/", ".kube/", ".gnupg/", ".npmrc", ".pypirc", ".netrc",
+        ".git-credentials", ".pgpass", ".vault-token", "secrets.*",
+        "credentials.*", "token.json", "auth.json",
+        "application_default_credentials.json",
+        # By path, not by name: `.docker/` and `environ` alone are ordinary.
+        "*.docker/config.json", "*/proc/*/environ",
     ],
     # Match credential *values*, not the mere mention of a credential word.
     # `(?i)api[_-]?key` alone classified any doc or config that talks about API
     # keys as SECRET, which then denied external writes.
+    #
+    # Every pattern has to stay linear in its input: the scanner runs them
+    # over whole web pages. A run of characters followed by a required
+    # character is the shape to watch; the JWT pattern may only start at the
+    # beginning of such a run for that reason.
     "secret_patterns": [
-        r"(?i)api[_-]?key\s*[:=]\s*[\"']?[A-Za-z0-9._\-]{16,}",
-        r"(?i)secret[_-]?key\s*[:=]\s*[\"']?[A-Za-z0-9._\-]{16,}",
-        r"(?i)access[_-]?token\s*[:=]\s*[\"']?[A-Za-z0-9._\-]{16,}",
-        r"(?i)password\s*[:=]\s*[\"']?[^\s\"']{8,}",
+        # `name = value`, also where the name is a quoted key: "api_key": "..."
+        r"(?i)api[_-]?key[\"']?\s*[:=]\s*[\"']?[A-Za-z0-9._\-]{16,}",
+        r"(?i)secret[_-]?key[\"']?\s*[:=]\s*[\"']?[A-Za-z0-9._\-]{16,}",
+        r"(?i)access[_-]?token[\"']?\s*[:=]\s*[\"']?[A-Za-z0-9._\-]{16,}",
+        r"(?i)password[\"']?\s*[:=]\s*[\"']?[^\s\"']{8,}",
+        r"(?i)secret[_-]?access[_-]?key[\"']?\s*[:=]\s*[\"']?[A-Za-z0-9/+=]{40}",
         r"(?i)bearer\s+[A-Za-z0-9._-]{20,}",
         r"AKIA[0-9A-Z]{16}",
         r"gh[pousr]_[A-Za-z0-9]{30,}",
+        r"github_pat_[A-Za-z0-9_]{40,}",
+        r"glpat-[A-Za-z0-9_\-]{20,}",
         r"sk-[A-Za-z0-9]{20,}",
+        r"(?<![A-Za-z0-9])sk-(?:ant|proj|svcacct|admin|or)-[A-Za-z0-9_\-]{20,}",
         r"xox[baprs]-[A-Za-z0-9-]{10,}",
-        r"-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----",
+        # A JWT: three base64url parts, the first two beginning with `{"`.
+        r"(?<![A-Za-z0-9_\-])eyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}",
+        # A connection URL with a password in it. Not one whose password is a
+        # placeholder (`<password>`, `${DB_PASS}`, `password`) or repeats the
+        # user name (`postgres:postgres@`): those are examples and dev defaults.
+        r"(?i)\b(?:postgres(?:ql)?|mysql|mariadb|mongodb|rediss?|amqps?|mssql)(?:\+[a-z0-9]+)?"
+        r"://([^\s:/@]*):"
+        r"(?!\1@|(?:pass(?:word|wd)?|pwd|secret|changeme|example|x{3,})@|\$[{(a-z_]|[<{\[*]|%s)"
+        r"[^\s:/@]{3,}@",
+        r"-----BEGIN (RSA |EC |OPENSSH |DSA |ENCRYPTED |PGP )?PRIVATE KEY( BLOCK)?-----",
     ],
     "audit": {
         "backend": "sqlite",

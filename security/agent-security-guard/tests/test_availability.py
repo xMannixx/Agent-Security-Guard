@@ -33,6 +33,7 @@ from agent_security_guard import (
     load_config,
     normalize_mode,
 )
+from secret_samples import FILES_THAT_ONLY_SOUND_SECRET, ORDINARY_TEXTS
 
 # Tool names a real host forwards that the guard's kind table does not know.
 HOST_TOOL_NAMES = [
@@ -793,3 +794,54 @@ def test_operator_can_take_the_memory_tool_out_of_the_rules_again():
 def test_memory_reads_stay_free_after_a_web_read(tool):
     decision = _after_web_read(AgentAction(kind=tool, metadata={"query": "deploy steps"}))
     assert decision.decision in (Decision.ALLOW, Decision.ALLOW_WITH_WARNING), decision
+
+
+# --------------------------------------------------------------------------- #
+# 13. Knowing more credential formats must not find them in ordinary text
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize("text", ORDINARY_TEXTS)
+def test_text_that_mentions_credentials_can_still_be_sent(text):
+    # Not free (an external write asks by default), but not "a secret".
+    decision = GuardAdapter().guard_action(
+        AgentAction(kind="http_post", target="https://api.example.com/issues", payload=text),
+        GuardContext(origin_trust=OriginTrust.TRUSTED_USER),
+    )
+    assert decision.reason_code is ReasonCode.EXTERNAL_WRITE_REQUIRES_CONFIRMATION, decision
+
+
+@pytest.mark.parametrize("query", [
+    "ECONNREFUSED postgres://postgres:postgres@localhost:5432/app",
+    "sqlalchemy postgresql://user:password@localhost/db could not connect",
+    "what is a JWT and why does it start with eyJ",
+    "sk-proj keys vs sk-ant keys difference",
+    "glpat token scopes",
+    "where does docker store auth.json and token.json",
+])
+def test_searching_for_an_error_message_stays_free(query):
+    decision = GuardAdapter().guard_action(
+        AgentAction(kind="web_search", target=query),
+        GuardContext(origin_trust=OriginTrust.TRUSTED_USER),
+    )
+    assert decision.decision is Decision.ALLOW, decision
+
+
+@pytest.mark.parametrize("path", FILES_THAT_ONLY_SOUND_SECRET)
+def test_files_that_only_sound_like_credentials_are_ordinary_reads(path):
+    adapter = GuardAdapter()
+    context = GuardContext(origin_trust=OriginTrust.LOCAL_PROJECT)
+    read = adapter.guard_action(AgentAction(kind="read_file", target=path), context)
+    assert read.decision is Decision.ALLOW, read
+    later = adapter.guard_action(
+        AgentAction(kind="http_post", target="https://api.example.com/x", payload="x"), context
+    )
+    assert later.reason_code is not ReasonCode.SECRET_THEN_EXFIL
+
+
+def test_reading_a_credential_file_is_flagged_but_not_blocked():
+    decision = GuardAdapter().guard_action(
+        AgentAction(kind="read_file", target="/home/u/.docker/config.json"),
+        GuardContext(origin_trust=OriginTrust.LOCAL_PROJECT),
+    )
+    assert decision.decision is Decision.ALLOW_WITH_WARNING
