@@ -1,7 +1,7 @@
 ---
 name: agent-security-guard
 description: "Runtime interaction guard for Hermes/OpenClaw: a deterministic transition policy engine that keeps reading, browsing, and summarizing free while stripping command-authority from untrusted content. Separates origin trust from data sensitivity, classifies actions into tiers, blocks dangerous kill-chains (read secret -> external post, web -> shell, download -> execute, untrusted -> privileged memory), wraps untrusted content as data (not instructions), and emits machine-readable decisions with audit. Default mode: autonomous-safe."
-version: 0.3.0
+version: 0.4.0
 author: xMannixx
 license: MIT
 platforms: [linux, macos, windows]
@@ -94,6 +94,17 @@ one chain. `tiers.after_untrusted_content` tunes it.
 
 ## Status
 
+v0.4.0 works through the findings of a security review of 0.3.0. The hard
+rules now hold under the names and call shapes hosts really use, and reach
+Hermes as `block` / `approve`; web results are wrapped as data and a state
+change after outside content asks first; a secret in any request is denied,
+also through the host's own web tools; memory lanes are read in one place; a
+confirmed skill patch is the patch that is written; `guard.yaml` is applied as
+written or not at all; the audit trail is private, outside the workspace and
+hash-chained; the guard's own files need approval to be rewritten. Not
+covered: what an agent does through a shell command. Not yet run inside a live
+Hermes.
+
 v0.3.0 fixes a critical over-blocking regression: 0.2.x denied nearly every
 call in a live host, including the host's own tools, with no way to loosen the
 policy. Unknown tool kinds, ordinary project files, everyday confirmations, a
@@ -108,6 +119,6 @@ confirmation (see `references/self-modification.md`). v0.1.0 delivered the
 policy core, scanner + boundary wrapper, sequence kill-chain detection,
 SQLite/JSONL audit, memory bridge, CLI, and the plugin.
 
-246 tests pass: the OpenClaw threat-class regressions, the self-improvement
+1246 tests pass: the OpenClaw threat-class regressions, the self-improvement
 end-to-end bar, and `tests/test_availability.py` (the guard must not block the
 host). See `README.md`, `ROADMAP.md`, and `references/`.
