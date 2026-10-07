@@ -845,3 +845,92 @@ def test_reading_a_credential_file_is_flagged_but_not_blocked():
         GuardContext(origin_trust=OriginTrust.LOCAL_PROJECT),
     )
     assert decision.decision is Decision.ALLOW_WITH_WARNING
+
+
+# --------------------------------------------------------------------------- #
+# 14. Looking at a host's web tools must not stop it from browsing
+# --------------------------------------------------------------------------- #
+
+ORDINARY_WEB_CALLS = [
+    ("web_extract", {"urls": ["https://docs.python.org/3/library/re.html"]}),
+    ("web_extract", {"urls": ["https://a.example/x", "https://b.example/y#frag"], "format": "markdown"}),
+    ("web_search", {"query": "how to set DATABASE_URL in prisma", "limit": 5}),
+    ("web_search", {"query": "ECONNREFUSED postgres://postgres:postgres@localhost:5432/app"}),
+    ("x_search", {"query": "python 3.13 release"}),
+    ("browser_navigate", {"url": "https://github.com/search?q=guard&type=repositories"}),
+    ("browser_type", {"ref": "e12", "text": "hello world"}),
+    ("browser_click", {"ref": "e3"}),
+    ("browser_snapshot", {}),
+]
+
+
+@pytest.mark.parametrize("tool,args", ORDINARY_WEB_CALLS)
+def test_ordinary_web_calls_run(isolated_plugin, tool, args):
+    payload = isolated_plugin.guard_tool_call(
+        tool_name=tool, args=args, session_id="avail-web", turn_id="t1"
+    )
+    assert payload["allowed"] is True, payload
+    assert "action" not in payload
+
+
+@pytest.mark.parametrize("tool,args", [
+    ("web_extract", {"urls": ["https://docs.python.org/3/library/re.html"]}),
+    ("web_extract", {"urls": ["https://a.example/x", "https://b.example/y#frag"]}),
+    ("web_search", {"query": "how to set DATABASE_URL in prisma"}),
+    ("browser_navigate", {"url": "https://docs.python.org/3/"}),
+    ("browser_snapshot", {}),
+    ("browser_click", {"ref": "e3"}),
+    ("dashboard_query", {"panel": "cpu"}),
+    ("search_files", {"query": "TODO"}),
+])
+def test_plain_host_web_calls_stay_free_after_a_secret_read(isolated_plugin, tool, args):
+    # Reading .env and then looking something up is ordinary work.
+    def call(name, arguments):
+        return isolated_plugin.guard_tool_call(
+            tool_name=name, args=arguments, session_id="avail-web", turn_id="t1"
+        )
+
+    call("read_file", {"path": "/proj/.env"})
+    payload = call(tool, args)
+    assert payload["allowed"] is True, payload
+
+
+@pytest.mark.parametrize("tool,args", [
+    # Local tools send nothing anywhere, whatever their arguments look like.
+    ("search_files", {"query": "AKIAABCDEFGHIJKLMNOP"}),
+    ("session_search", {"query": "password: hunter2hunter2"}),
+    ("grep", {"pattern": "api_key=A1b2C3d4E5f6G7h8J9k0", "path": "."}),
+    ("todo_write", {"todos": [{"content": "rotate AKIAABCDEFGHIJKLMNOP"}]}),
+])
+def test_local_tools_are_not_requests(isolated_plugin, tool, args):
+    payload = isolated_plugin.guard_tool_call(
+        tool_name=tool, args=args, session_id="avail-web", turn_id="t1"
+    )
+    assert payload["allowed"] is True, payload
+    assert payload["reason_code"] == "UNKNOWN_ACTION_AUDITED"
+
+
+def test_operator_can_free_host_web_requests_after_a_secret_read():
+    config = load_config(None)
+    config.tiers["read_with_data_after_secret"] = "allow"
+    adapter = GuardAdapter(config=config)
+    context = GuardContext(origin_trust=OriginTrust.LOCAL_PROJECT, config=config)
+    adapter.guard_action(AgentAction(kind="read_file", target="/proj/.env"), context)
+    decision = adapter.guard_action(
+        AgentAction(kind="web_extract", metadata={"urls": ["https://api.github.com/search?q=guard"]}),
+        context,
+    )
+    assert decision.decision in (Decision.ALLOW, Decision.ALLOW_WITH_WARNING), decision
+
+
+def test_next_turn_after_a_secret_read_browses_freely(isolated_plugin):
+    payloads = [
+        isolated_plugin.guard_tool_call(
+            tool_name=tool, args=args, session_id="avail-web", turn_id=turn
+        )
+        for tool, args, turn in (
+            ("read_file", {"path": "/proj/.env"}, "t1"),
+            ("browser_navigate", {"url": "https://github.com/search?q=guard"}, "t2"),
+        )
+    ]
+    assert payloads[1]["allowed"] is True, payloads[1]

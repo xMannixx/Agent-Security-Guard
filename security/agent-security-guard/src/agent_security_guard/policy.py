@@ -470,7 +470,7 @@ def decide_action(
         if scope_decision is not None:
             return scope_decision
 
-    if tier in (ActionTier.READ_ONLY, ActionTier.DOWNLOAD) and _sends_secret(action, context):
+    if tier in _REQUEST_TIERS and _sends_secret(action, context):
         # "Read-only" describes the remote side. The request itself is data
         # leaving the machine, whatever the method.
         return _deny(
@@ -526,8 +526,16 @@ def decide_action(
     return _decide_unknown_action(context)
 
 
+# Tiers whose action may be a request to a remote host without being a write.
+# A host's own web tools (`web_extract`, `browser_navigate`) are unrecognized
+# kinds; left out, a secret in their URL was not looked at.
+_REQUEST_TIERS = (ActionTier.READ_ONLY, ActionTier.DOWNLOAD, ActionTier.UNKNOWN)
+
+
 def _sends_secret(action: AgentAction, context: GuardContext) -> bool:
-    return context.data_sensitivity is DataSensitivity.SECRET and sends_to_remote(action)
+    return context.data_sensitivity is DataSensitivity.SECRET and sends_to_remote(
+        action, context.config
+    )
 
 
 def _decide_unknown_action(context: GuardContext) -> GuardDecision:

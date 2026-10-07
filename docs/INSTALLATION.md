@@ -162,7 +162,9 @@ What acts in Hermes, and what cannot:
 
 - **Acts without any provenance:** the self-modification bar (`skill_manage`,
   file tools on `SKILL.md` or `guard.yaml`), the secret-read then
-  external-write chain, secret payloads in requests, the block on
+  external-write chain, a secret in what `web_extract`, `web_search` or a
+  browser tool sends (denied), a URL with a query string in such a call after
+  a credential file was read in the turn (approval prompt), the block on
   state-changing tools while the guard cannot evaluate, and, if you set
   `scope_from_text: true`, the no-write scope read from your message.
 - **Acts on what was read:** once a web, search or browser tool ran in a turn,

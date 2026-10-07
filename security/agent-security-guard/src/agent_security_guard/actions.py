@@ -12,8 +12,8 @@ import dataclasses
 import fnmatch
 import json
 import re
-from typing import Any, Optional
-from urllib.parse import urlsplit
+from typing import Any, Iterator, List, Optional
+from urllib.parse import unquote, urlsplit
 
 from .host_tools import HOST_TOOL_TIER, UNTRUSTED_CONTENT_TOOLS
 from .types import ActionTier, AgentAction, GuardConfig
@@ -128,10 +128,48 @@ def _read_tier_for_target(tier: ActionTier, target: str) -> ActionTier:
     return tier
 
 
-def sends_to_remote(action: AgentAction) -> bool:
-    """True for an action that puts its target on the network: a request to a
-    URL, or a web search (the query goes to the search provider)."""
-    return _is_remote(action.target) or _kind(action) == "web_search"
+# The names tools give the URLs they fetch. A host's own web tools do not use
+# the guard's `target`: Hermes' `web_extract` takes `urls`, a list.
+_URL_KEYS = ("url", "urls", "uri", "link", "links", "href")
+
+
+def remote_urls(action: AgentAction) -> List[str]:
+    """The remote URLs an action names, in its target or in its arguments."""
+    candidates = [action.target or ""]
+    metadata = action.metadata or {}
+    for key in _URL_KEYS:
+        candidates.extend(_strings(metadata.get(key)))
+    urls: List[str] = []
+    for candidate in candidates:
+        url = candidate.strip()
+        if _is_remote(url) and url not in urls:
+            urls.append(url)
+    return urls
+
+
+def sends_to_remote(action: AgentAction, config: Optional[GuardConfig] = None) -> bool:
+    """True for an action that puts something on the network: a request to a
+    URL, or a call of a web, search or browser tool, whose arguments go to the
+    page or the search provider."""
+    return (
+        bool(remote_urls(action))
+        or _kind(action) == "web_search"
+        or _talks_to_the_outside(action, config)
+    )
+
+
+def outbound_text(action: AgentAction, config: Optional[GuardConfig] = None) -> str:
+    """What the action sends besides a body, as text to look for a secret in.
+
+    The URLs it names, percent-decoded. For a web, search or browser tool also
+    every other argument: the query goes to the search provider, the text typed
+    into a page goes to the page.
+    """
+    parts = [unquote(url) for url in remote_urls(action)]
+    if _kind(action) == "web_search" or _talks_to_the_outside(action, config):
+        parts.append(unquote(action.target or ""))
+        parts.extend(_strings(action.metadata or {}))
+    return "\n".join(part for part in parts if part)
 
 
 def brings_untrusted_content(
@@ -144,12 +182,7 @@ def brings_untrusted_content(
     nothing about who asked for the read: a page the user asked for is still a
     page somebody else wrote.
     """
-    kind = _kind(action)
-    patterns = (
-        config.untrusted_content_tools if config is not None else UNTRUSTED_CONTENT_TOOLS
-    )
-    names = {kind, _NAMESPACE_SEPARATOR.split(kind)[-1]}
-    if any(fnmatch.fnmatchcase(name, pattern) for name in names for pattern in patterns):
+    if _talks_to_the_outside(action, config):
         return True
     return (
         classify_action(action, config) is ActionTier.READ_ONLY
@@ -157,18 +190,54 @@ def brings_untrusted_content(
     )
 
 
+def _talks_to_the_outside(action: AgentAction, config: Optional[GuardConfig]) -> bool:
+    """Whether the tool is on the untrusted-content list by its name."""
+    kind = _kind(action)
+    patterns = (
+        config.untrusted_content_tools if config is not None else UNTRUSTED_CONTENT_TOOLS
+    )
+    names = {kind, _NAMESPACE_SEPARATOR.split(kind)[-1]}
+    return any(fnmatch.fnmatchcase(name, pattern) for name in names for pattern in patterns)
+
+
 def carries_data_out(action: AgentAction) -> bool:
     """True when a request to a URL has room for data besides the address: a
     query string, credentials in the URL, or a body."""
-    if not _is_remote(action.target):
+    urls = remote_urls(action)
+    if not urls:
         return False
     if action.payload:
         return True
+    return any(_has_room_for_data(url) for url in urls)
+
+
+def _has_room_for_data(url: str) -> bool:
     try:
-        parts = urlsplit(action.target.strip())
+        parts = urlsplit(url)
     except ValueError:
         return True
     return bool(parts.query or parts.username or parts.password)
+
+
+def _strings(value: Any) -> Iterator[str]:
+    """The strings in a tool argument, which may be a list or a mapping.
+
+    Walked with a stack of its own, in order. Recursion would give a caller a
+    depth past which nothing is looked at, or an exception to end the
+    evaluation with.
+    """
+    pending = [value]
+    seen = set()
+    while pending:
+        item = pending.pop()
+        if isinstance(item, str):
+            yield item
+        elif isinstance(item, (dict, list, tuple)):
+            if id(item) in seen:
+                continue
+            seen.add(id(item))
+            children = item.values() if isinstance(item, dict) else item
+            pending.extend(reversed(list(children)))
 
 
 def recognized_by_name_only(
