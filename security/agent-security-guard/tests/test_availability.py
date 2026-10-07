@@ -11,6 +11,8 @@ These tests are the counterweight to `test_threat_regression.py`: that file
 proves attacks stay blocked, this one proves normal work stays possible.
 """
 
+from pathlib import Path
+
 import plugin as guard_plugin
 import pytest
 
@@ -1135,3 +1137,68 @@ def test_failing_trail_does_not_change_a_plain_allow():
     )
     assert decision.decision is Decision.ALLOW
     assert adapter.audit_failures == 1
+
+
+# --------------------------------------------------------------------------- #
+# 18. Guarding the guard's own files must not get in the way of other files
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize("target", [
+    "notes.md",
+    "src/app/policy.py",                              # same file name, another project
+    "/home/u/projects/other/agent_security_guard/policy.py",
+    "/home/u/checkouts/Agent-Security-Guard/security/agent-security-guard/src/agent_security_guard/policy.py",
+    "/home/u/.hermes/skills/notes.txt",
+    "/usr/local/lib/python3/site-packages/requests/api.py",
+    # beside the package, not in it: nothing is loaded from there any more
+    str(Path(guard_plugin.__file__).resolve().parent.parent
+        / "security" / "agent-security-guard" / "src" / "colorsys.py"),
+])
+def test_files_that_are_not_the_running_guard_are_ordinary_writes(target):
+    # Another checkout of this project is somebody's work, not this guard.
+    decision = GuardAdapter().guard_action(
+        AgentAction(kind="write_file", target=target),
+        GuardContext(origin_trust=OriginTrust.TRUSTED_USER),
+    )
+    assert decision.reason_code is ReasonCode.LOCAL_WRITE_AUDITED
+
+
+def test_reading_the_guards_own_code_stays_free():
+    import agent_security_guard
+
+    decision = GuardAdapter().guard_action(
+        AgentAction(kind="read_file", target=agent_security_guard.__file__),
+        GuardContext(origin_trust=OriginTrust.TRUSTED_USER),
+    )
+    assert decision.decision is Decision.ALLOW
+
+
+def test_user_ordered_change_to_the_guard_reaches_confirmation():
+    import agent_security_guard
+
+    decision = GuardAdapter().guard_action(
+        AgentAction(kind="write_file", target=agent_security_guard.__file__),
+        GuardContext(
+            origin_trust=OriginTrust.TRUSTED_USER,
+            user_intent_origin=UserIntentOrigin.HUMAN_EXPLICIT,
+        ),
+    )
+    assert decision.reason_code is ReasonCode.SELF_MODIFICATION_REQUIRES_CONFIRMATION
+
+
+def test_plugin_import_leaves_the_hosts_import_path_alone():
+    import subprocess
+    import sys
+
+    repo_root = Path(guard_plugin.__file__).resolve().parent.parent
+    script = (
+        "import sys\n"
+        f"sys.path.insert(0, {str(repo_root)!r})\n"
+        "before = list(sys.path)\n"
+        "import plugin\n"
+        "assert sys.path == before, sys.path\n"
+        "assert plugin.guard_status()['available'] is True\n"
+    )
+    done = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=120)
+    assert done.returncode == 0, done.stderr

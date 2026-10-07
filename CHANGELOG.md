@@ -224,6 +224,23 @@ including `test_availability.py`, passes unchanged.
     (`audit.log_allows`, default `true`).
   - A file tool that targets the trail is treated like one that targets
     `guard.yaml`.
+- **The guard's code is no longer loaded through the import path, and writing
+  it is no longer an ordinary file write.** The plugin put
+  `~/.hermes/agent-security-guard/src` and the copy beside it at the front of
+  `sys.path`. Every module name in those directories then came before the
+  standard library for the whole host (a `colorsys.py` written there was what
+  `import colorsys` found), and a file tool could replace the guard's own
+  files like any other file.
+  - The package is loaded by its location and the import path is left alone.
+  - Locations are tried in this order: `/usr/local/lib/agent-security-guard/src`
+    (for an install owned by root, which the agent cannot rewrite), the copy
+    beside the plugin, the copy in the home, and only then an installed
+    package. `guard_status()["loaded_from"]` says which one was used.
+  - A copy that every user of the machine can write to, or that belongs to
+    another user, is not loaded; the reason is in `guard_status()["error"]`.
+  - A recognized file tool that writes into the package (in any of the
+    locations, also an empty one) or into the plugin's directory is treated as
+    a change to the guard itself, like a write to `guard.yaml`.
 - **The memory bridge no longer trusts a source it has no entry for.** Only
   `tool`, `external` and `inference` counted as untrusted, so a preference
   "from `web`" was allowed. Anything but `observation` and `conversation` is

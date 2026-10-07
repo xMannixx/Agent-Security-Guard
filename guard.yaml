@@ -188,6 +188,10 @@ wrap_tool_results: true
 # behavior, so it is held to the self-modification bar (explicit user order,
 # never a direct allow) instead of being treated as a plain file write. Same
 # pattern syntax as sensitive_paths; matched case-insensitively.
+#
+# Not listed and always covered: the audit trail, the guard's own code (the
+# package and the plugin, wherever they are loaded from) and the locations the
+# plugin would load a copy from.
 self_modification_paths:
   - "SKILL.md"
   - "guard.yaml"

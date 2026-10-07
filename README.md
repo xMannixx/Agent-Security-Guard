@@ -104,7 +104,7 @@ defaults with `config_error` in its decisions).
 | after a secret read: GET-like request with a query string, URL credentials or a body, also through the host's own web tools | `require_confirmation` | `SECRET_THEN_EXFIL` |
 | untrusted web/doc -> file write (`write_file`, `patch`, ...) | `deny` | `UNTRUSTED_TO_LOCAL_WRITE` |
 | file write from a trusted origin | `allow_with_warning` | `LOCAL_WRITE_AUDITED` |
-| file tool writing `SKILL.md` / `guard.yaml` | as self-modification | `SELF_MODIFICATION_...` |
+| file tool writing `SKILL.md` / `guard.yaml`, the audit trail, or the guard's own code | as self-modification | `SELF_MODIFICATION_...` |
 | host tool recognized by name, trusted origin, nothing pointing at danger | `allow_with_warning` | `HOST_TOOL_AUDITED` |
 | unrecognized tool kind (non-strict) | `allow_with_warning` | `UNKNOWN_ACTION_AUDITED` |
 | unrecognized tool kind proposed by untrusted content | `deny` | `UNTRUSTED_TO_UNKNOWN_ACTION` |

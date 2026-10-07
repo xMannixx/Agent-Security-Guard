@@ -36,9 +36,12 @@ from __future__ import annotations
 
 import fnmatch
 import hashlib
+import importlib.util
 import json
 import logging
+import os
 import re
+import stat
 import sys
 import threading
 from collections import OrderedDict
@@ -47,14 +50,93 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("agent_security_guard_plugin")
 
-# Make the package importable from common install locations.
-for _candidate in (
-    Path.home() / ".hermes" / "agent-security-guard" / "src",
-    Path(__file__).resolve().parent.parent
-    / "security" / "agent-security-guard" / "src",
-):
-    if _candidate.exists() and str(_candidate) not in sys.path:
-        sys.path.insert(0, str(_candidate))
+_PACKAGE = "agent_security_guard"
+_PLUGIN_DIR = Path(__file__).resolve().parent
+# For an install the agent cannot rewrite: owned by root, like the policy in
+# /etc/agent-security-guard. Looked at first.
+_SYSTEM_PACKAGE = Path("/usr/local/lib/agent-security-guard/src")
+
+
+def _package_locations() -> List[Path]:
+    """Where a copy of the package may be, in the order they are tried."""
+    return [
+        _SYSTEM_PACKAGE,
+        _PLUGIN_DIR.parent / "security" / "agent-security-guard" / "src",
+        Path.home() / ".hermes" / "agent-security-guard" / "src",
+    ]
+
+
+def _refusal(location: Path, name: str = _PACKAGE) -> Optional[str]:
+    """Why the copy in ``location`` must not be loaded, or None.
+
+    A copy any user of the machine can rewrite, or one that belongs to
+    somebody else, is not the operator's guard. One the operator's own account
+    can rewrite cannot be told from a legitimate install, and is accepted.
+    """
+    if os.name != "posix":
+        return None
+    for directory in (location, location / name):
+        info = directory.stat()
+        if info.st_mode & stat.S_IWOTH:
+            return f"{directory} is writable by every user of this machine"
+        if info.st_uid not in (0, os.getuid()):
+            return f"{directory} belongs to another user"
+    return None
+
+
+def _load_package(location: Path, name: str = _PACKAGE) -> None:
+    """Load the package from exactly this directory, leaving ``sys.path`` alone.
+
+    The directory used to be put at the front of ``sys.path``. Every module
+    name in it then came before the standard library for the whole host: a
+    ``colorsys.py`` next to the package was what ``import colorsys`` found.
+    Loaded by its file, the package is the only thing that comes from there.
+    """
+    package_dir = location / name
+    spec = importlib.util.spec_from_file_location(
+        name, str(package_dir / "__init__.py"),
+        submodule_search_locations=[str(package_dir)],
+    )
+    if spec is None or spec.loader is None:
+        raise ImportError(f"{package_dir} is not a package")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        for loaded in [key for key in sys.modules if key == name or key.startswith(name + ".")]:
+            del sys.modules[loaded]
+        raise
+
+
+_load_notes: List[str] = []
+
+
+def _find_package() -> None:
+    """Have the package loaded from the first usable location.
+
+    Without one, the import below is left to whatever the interpreter finds:
+    an installed package.
+    """
+    if _PACKAGE in sys.modules:  # the host imported it itself
+        return
+    for location in _package_locations():
+        if not (location / _PACKAGE / "__init__.py").is_file():
+            continue
+        try:
+            refusal = _refusal(location)
+            if refusal:
+                _load_notes.append(f"not loaded from {location}: {refusal}")
+                logger.error("guard package %s", _load_notes[-1])
+                continue
+            _load_package(location)
+            return
+        except Exception as exc:
+            _load_notes.append(f"not loaded from {location}: {exc}")
+            logger.warning("guard package %s", _load_notes[-1])
+
+
+_find_package()
 
 _IMPORT_ERROR: Optional[str] = None
 try:
@@ -76,11 +158,25 @@ try:
     )
 except Exception as exc:  # pragma: no cover - exercised only on broken installs
     logger.warning("agent-security-guard import failed: %s", exc)
-    _IMPORT_ERROR = str(exc)
+    _IMPORT_ERROR = "; ".join([str(exc)] + _load_notes)
     GuardAdapter = None  # type: ignore
     # Stand-in so the hook can still describe the call and reach the degraded
     # decision; without it _extract_action raised NameError instead.
     from types import SimpleNamespace as AgentAction  # type: ignore
+
+
+try:
+    # The plugin and the package, in every place it may be loaded from, are
+    # the guard's own code. A file tool writing there is not an ordinary
+    # write, also where nothing is installed yet: a copy planted in a location
+    # that is tried earlier would be the guard at the next start.
+    from agent_security_guard import protect_guard_files  # noqa: E402
+
+    protect_guard_files(
+        _PLUGIN_DIR, *(location / _PACKAGE for location in _package_locations())
+    )
+except Exception as exc:  # an older package, or none at all
+    logger.warning("guard files are not protected from file tools: %s", exc)
 
 
 _adapter = None
@@ -770,6 +866,10 @@ def guard_status() -> Dict[str, Any]:
     return {
         "available": GuardAdapter is not None,
         "error": _IMPORT_ERROR,
+        # Where the code in use came from.
+        "loaded_from": os.path.dirname(
+            getattr(sys.modules.get(_PACKAGE), "__file__", None) or ""
+        ) or None,
         "config_error": _config_error,
         # None until the first hook call has created the adapter.
         "mode": getattr(_adapter, "mode", None),

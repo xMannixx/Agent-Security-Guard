@@ -99,8 +99,7 @@ guard.yaml                       # policy configuration
 
 ### Install the skill
 
-Copy or symlink the skill into the location your runtime scans. The plugin
-already searches `~/.hermes/agent-security-guard/src` first:
+Copy or symlink the skill into the location your runtime scans:
 
 ```bash
 # Linux / macOS
@@ -111,6 +110,33 @@ cp -r security/agent-security-guard/* ~/.hermes/agent-security-guard/
 New-Item -ItemType Directory -Force "$HOME\.hermes\agent-security-guard"
 Copy-Item -Recurse "security\agent-security-guard\*" "$HOME\.hermes\agent-security-guard\"
 ```
+
+The plugin loads the guard's code from the first of these that holds a copy:
+
+1. `/usr/local/lib/agent-security-guard/src`
+2. the copy beside the plugin (a checkout of this repository)
+3. `~/.hermes/agent-security-guard/src`
+
+and, if none does, from an installed package. `guard_status()["loaded_from"]`
+says which one it was. Each copy is loaded by its location: the directory is
+not added to the interpreter's import path, so nothing else in it can be
+imported by the host or stand in for a standard-library module.
+
+The copy in your home directory is one the agent can rewrite, because the
+agent runs under your user. A recognized file tool that writes into any of the
+three locations, or into the plugin's directory, is treated as a change to the
+guard itself and needs your approval; a shell command is not seen. For an
+install the agent cannot touch, put the copy in the first location, owned by
+root:
+
+```bash
+sudo mkdir -p /usr/local/lib/agent-security-guard
+sudo cp -r security/agent-security-guard/src /usr/local/lib/agent-security-guard/
+```
+
+A copy that every user of the machine can write to, or that belongs to another
+user, is not loaded at all; the guard then reports the reason in
+`guard_status()["error"]` and runs in its degraded mode.
 
 ### Enable the plugin
 
