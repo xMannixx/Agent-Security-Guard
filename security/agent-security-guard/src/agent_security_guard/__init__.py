@@ -39,6 +39,7 @@ from .policy import (
     is_state_changing,
     load_config,
     path_is_sensitive,
+    protect_guard_files,
     resolve_mode,
     tier_setting,
 )
@@ -84,6 +85,7 @@ __all__ = [
     "load_config",
     "domain_allowed",
     "path_is_sensitive",
+    "protect_guard_files",
     "resolve_mode",
     "tier_setting",
     "is_state_changing",

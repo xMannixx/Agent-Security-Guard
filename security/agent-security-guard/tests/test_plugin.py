@@ -1,5 +1,7 @@
 """Dummy Hermes/OpenClaw host exercising the plugin hooks."""
 
+from pathlib import Path
+
 import plugin as guard_plugin
 
 
@@ -439,3 +441,75 @@ def test_scope_from_text_uses_the_message_given_to_pre_llm_call(isolated_plugin)
     assert write("s1", scope_from_text=True)["reason_code"] == "EXPLICIT_NO_WRITE_SCOPE_VIOLATION"
     assert write("s2", scope_from_text=True)["allowed"] is True  # another session
     assert write("s1")["allowed"] is True  # still opt-in
+
+
+# --------------------------------------------------------------------------- #
+# Where the plugin takes the guard's code from
+# --------------------------------------------------------------------------- #
+
+
+def _fake_package(root, name, body="VALUE = 1\n"):
+    package = root / name
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("from .inner import VALUE\n", encoding="utf-8")
+    (package / "inner.py").write_text(body, encoding="utf-8")
+    return package
+
+
+def test_package_is_loaded_by_its_location_without_touching_sys_path(tmp_path):
+    import sys
+
+    _fake_package(tmp_path, "asg_fake_loaded")
+    before = list(sys.path)
+    try:
+        guard_plugin._load_package(tmp_path, "asg_fake_loaded")
+        assert sys.modules["asg_fake_loaded"].VALUE == 1
+        assert sys.modules["asg_fake_loaded.inner"].__file__.startswith(str(tmp_path))
+        assert sys.path == before
+    finally:
+        for key in [key for key in sys.modules if key.startswith("asg_fake_loaded")]:
+            del sys.modules[key]
+
+
+def test_package_that_fails_to_load_leaves_nothing_behind(tmp_path):
+    import sys
+
+    import pytest
+
+    _fake_package(tmp_path, "asg_fake_broken", body="raise RuntimeError('broken install')\n")
+    with pytest.raises(RuntimeError):
+        guard_plugin._load_package(tmp_path, "asg_fake_broken")
+    assert not [key for key in sys.modules if key.startswith("asg_fake_broken")]
+
+
+def test_locations_are_tried_from_the_one_the_agent_cannot_write_to():
+    system, beside_the_plugin, in_home = guard_plugin._package_locations()
+    assert str(system).startswith("/usr/local/lib/")
+    assert beside_the_plugin.parent.parent.parent == guard_plugin._PLUGIN_DIR.parent
+    assert ".hermes" in in_home.parts
+
+
+def test_copy_that_every_user_can_rewrite_is_refused(tmp_path):
+    import os
+
+    import pytest
+
+    if os.name != "posix":
+        pytest.skip("POSIX file modes")
+    package = _fake_package(tmp_path, "asg_fake_perm")
+    os.chmod(tmp_path, 0o755)
+    os.chmod(package, 0o775)            # group-writable, as under umask 002
+    assert guard_plugin._refusal(tmp_path, "asg_fake_perm") is None
+    os.chmod(package, 0o777)
+    assert "every user" in guard_plugin._refusal(tmp_path, "asg_fake_perm")
+    os.chmod(package, 0o755)
+    os.chmod(tmp_path, 0o757)
+    assert "every user" in guard_plugin._refusal(tmp_path, "asg_fake_perm")
+    os.chmod(tmp_path, 0o755)
+
+
+def test_status_says_where_the_code_came_from():
+    import agent_security_guard
+
+    status = guard_plugin.guard_status()
+    assert status["loaded_from"] == str(Path(agent_security_guard.__file__).parent)

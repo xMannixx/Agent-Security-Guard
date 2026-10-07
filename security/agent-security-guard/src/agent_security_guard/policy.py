@@ -769,7 +769,40 @@ def _written_paths(action: AgentAction) -> List[str]:
     return [path for path in paths if path and path != "/dev/null"]
 
 
+# Where the guard's own code lives: this package, and whatever a host
+# integration adds (its plugin directory, the places it loads the package
+# from). A file written there is the guard at its next start.
+_OWN_CODE: List[str] = [os.path.dirname(os.path.realpath(__file__))]
+
+
+def protect_guard_files(*paths: Any) -> None:
+    """Name further files or directories that are the guard's own code.
+
+    A recognized file tool that writes inside one of them is then judged as a
+    change to the guard itself, as a write to ``guard.yaml`` is. The directory
+    need not exist: a place the guard would load its code from is worth
+    protecting before anything is in it.
+    """
+    for path in paths:
+        resolved = os.path.realpath(os.path.expanduser(str(path)))
+        if resolved not in _OWN_CODE:
+            _OWN_CODE.append(resolved)
+
+
+def _is_guard_code(path: str) -> bool:
+    target = path.strip()
+    if target.lower().startswith("file:"):
+        target = unquote(urlsplit(target).path)
+    try:
+        full = os.path.realpath(os.path.expanduser(target))
+        return any(os.path.commonpath([root, full]) == root for root in _OWN_CODE)
+    except (OSError, ValueError):  # unreadable, or nothing in common at all
+        return False
+
+
 def _changes_the_agent(action: AgentAction, context: GuardContext) -> bool:
+    if any(_is_guard_code(path) for path in _written_paths(action)):
+        return True
     patterns = list(
         context.config.self_modification_paths
         if context.config is not None

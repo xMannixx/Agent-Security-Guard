@@ -75,6 +75,34 @@ What this does not do: tell the operator in the conversation. In a host that
 shows neither the log nor `config_error`, a refused file is noticed only by
 its settings not being in force.
 
+## The guard's own code
+
+The plugin made the package importable by putting two directories at the front
+of the interpreter's import path, one of them
+`~/.hermes/agent-security-guard/src`. Two things followed. Every module name
+in such a directory came before the standard library for the whole host, so a
+`colorsys.py` written there was what `import colorsys` found. And the
+directory in the home is the agent's to write, as is the plugin's: replacing a
+file of the guard with a file tool was an ordinary file write, allowed and
+audited, and the replacement was the guard at the next start.
+
+- The package is loaded by its location, from the first that holds a copy: a
+  system location (`/usr/local/lib/agent-security-guard/src`), the copy beside
+  the plugin, the one in the home, and only then whatever is installed. The
+  import path is left alone.
+- A copy that every user of the machine can write to, or that belongs to
+  another user, is not loaded.
+- A recognized file tool that writes into the package, in any of those
+  locations, or into the plugin's directory, is a change to the guard itself:
+  denied without an explicit user order, which in Hermes means the approval
+  prompt. This holds for a location that is still empty, because a copy
+  planted in one that is tried earlier would win.
+
+What remains is the same as for the trail: the agent runs as the operator's
+user, and a shell command that rewrites the guard is not seen. The system
+location, owned by root, is the answer to that, and it is the operator's step
+to take.
+
 ## The trail
 
 The audit trail is what is left to look at after something went wrong, so it

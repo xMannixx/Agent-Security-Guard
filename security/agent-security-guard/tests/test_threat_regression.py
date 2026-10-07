@@ -13,11 +13,16 @@ Threat classes:
 8. neutralizing the guard itself (class 7, self-modification, has its own files)
 """
 
+import json
 import os
 import re
+import shutil
 import sqlite3
+import subprocess
+import sys
 import threading
 import time
+from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import quote
 
@@ -1448,3 +1453,153 @@ def test_trail_under_a_name_of_the_operators_is_covered_too():
         GuardContext(origin_trust=OriginTrust.TRUSTED_USER, config=config),
     )
     assert decision.reason_code is ReasonCode.SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER
+
+
+# REPLACING THE GUARD ---------------------------------------------------------- #
+# The plugin put `~/.hermes/agent-security-guard/src` at the front of sys.path.
+# That directory is the agent's to write: whatever module was in it came before
+# the standard library for the whole host, and a package planted in a location
+# tried earlier was the guard at the next start. Writing there with a file tool
+# was an ordinary file write.
+
+REPO_ROOT = Path(guard_plugin.__file__).resolve().parent.parent
+PACKAGE_DIR = REPO_ROOT / "security" / "agent-security-guard" / "src" / "agent_security_guard"
+
+
+def _start_host(tmp_path, plugin_parent, code):
+    """Import the plugin in a fresh interpreter, as a host would at startup."""
+    environment = {
+        key: value for key, value in os.environ.items() if key != "PYTHONPATH"
+    }
+    environment["HOME"] = str(tmp_path / "home")
+    environment["XDG_STATE_HOME"] = str(tmp_path / "state")
+    workspace = tmp_path / "workspace"
+    workspace.mkdir(exist_ok=True)
+    script = (
+        "import json, sys\n"
+        f"sys.path.insert(0, {str(plugin_parent)!r})\n"
+        "import plugin\n" + code
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", script], env=environment, cwd=str(workspace),
+        capture_output=True, text=True, timeout=120,
+    )
+    assert done.returncode == 0, done.stderr
+    return json.loads(done.stdout.strip().splitlines()[-1])
+
+
+def _home_install(tmp_path):
+    """The install the guide describes: the package in ~/.hermes, the plugin
+    somewhere with no copy of the package beside it."""
+    source = tmp_path / "home" / ".hermes" / "agent-security-guard" / "src"
+    shutil.copytree(PACKAGE_DIR, source / "agent_security_guard")
+    host = tmp_path / "host"
+    shutil.copytree(REPO_ROOT / "plugin", host / "plugin")
+    return source, host
+
+
+def test_module_planted_next_to_the_package_does_not_shadow_the_standard_library(tmp_path):
+    planted = tmp_path / "home" / ".hermes" / "agent-security-guard" / "src"
+    planted.mkdir(parents=True)
+    (planted / "colorsys.py").write_text("PLANTED = True\n", encoding="utf-8")
+    seen = _start_host(
+        tmp_path, REPO_ROOT,
+        "import colorsys\n"
+        "print(json.dumps({'planted': hasattr(colorsys, 'PLANTED'), 'path': sys.path}))\n",
+    )
+    assert seen["planted"] is False
+    assert str(planted) not in seen["path"]
+
+
+def test_install_in_home_is_loaded_without_becoming_an_import_root(tmp_path):
+    source, host = _home_install(tmp_path)
+    (source / "colorsys.py").write_text("PLANTED = True\n", encoding="utf-8")
+    seen = _start_host(
+        tmp_path, host,
+        "import colorsys\n"
+        "print(json.dumps({'planted': hasattr(colorsys, 'PLANTED'), 'path': sys.path,\n"
+        "                  'status': plugin.guard_status()}))\n",
+    )
+    assert seen["status"]["available"] is True
+    assert seen["status"]["loaded_from"] == str(source / "agent_security_guard")
+    assert seen["planted"] is False
+    assert str(source) not in seen["path"]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX file modes")
+def test_install_that_every_user_can_rewrite_is_not_loaded(tmp_path):
+    source, host = _home_install(tmp_path)
+    os.chmod(source / "agent_security_guard", 0o777)
+    seen = _start_host(
+        tmp_path, host,
+        "shell = plugin.guard_tool_call(tool_name='terminal', args={'command': 'ls'})\n"
+        "print(json.dumps({'status': plugin.guard_status(), 'shell': shell}))\n",
+    )
+    assert seen["status"]["available"] is False
+    assert "every user" in seen["status"]["error"]
+    # Not loading it must not mean not guarding: the degraded rules apply.
+    assert seen["shell"]["block"] is True
+
+
+def test_package_planted_in_home_does_not_replace_the_copy_beside_the_plugin(tmp_path):
+    planted = tmp_path / "home" / ".hermes" / "agent-security-guard" / "src" / "agent_security_guard"
+    planted.mkdir(parents=True)
+    (planted / "__init__.py").write_text("raise SystemExit('planted guard was loaded')\n", encoding="utf-8")
+    seen = _start_host(
+        tmp_path, REPO_ROOT,
+        "print(json.dumps({'available': plugin.guard_status()['available'],\n"
+        "                  'file': sys.modules['agent_security_guard'].__file__}))\n",
+    )
+    assert seen["available"] is True
+    assert seen["file"] == str(PACKAGE_DIR / "__init__.py")
+
+
+GUARD_FILES = [
+    str(PACKAGE_DIR / "policy.py"),
+    str(PACKAGE_DIR / "brand_new_module.py"),
+    str(REPO_ROOT / "plugin" / "__init__.py"),
+    # locations the package is loaded from when a copy is there, also empty
+    "~/.hermes/agent-security-guard/src/agent_security_guard/__init__.py",
+    "/usr/local/lib/agent-security-guard/src/agent_security_guard/policy.py",
+    "file://" + str(PACKAGE_DIR / "policy.py"),
+    str(PACKAGE_DIR / ".." / "agent_security_guard" / "policy.py"),
+]
+
+
+@pytest.mark.parametrize("target", GUARD_FILES)
+@pytest.mark.parametrize("tool", ["write_file", "patch", "delete_file"])
+def test_file_tool_writing_the_guards_own_code_is_a_change_to_the_guard(tool, target):
+    decision = GuardAdapter().guard_action(
+        AgentAction(kind=tool, target=target), AGENT_ON_ITS_OWN
+    )
+    assert decision.decision is Decision.DENY
+    assert decision.reason_code is ReasonCode.SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER
+
+
+def test_patch_body_naming_a_guard_file_is_a_change_to_the_guard():
+    body = f"*** Begin Patch\n*** Update File: {PACKAGE_DIR / 'policy.py'}\n@@\n-a\n+b\n*** End Patch"
+    decision = GuardAdapter().guard_action(
+        AgentAction(kind="apply_patch", metadata={"patch": body}), AGENT_ON_ITS_OWN
+    )
+    assert decision.reason_code is ReasonCode.SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER
+
+
+def test_guard_code_reached_through_a_link_is_still_guard_code(tmp_path):
+    if os.name != "posix":
+        pytest.skip("symbolic links")
+    os.symlink(PACKAGE_DIR, tmp_path / "harmless-looking")
+    decision = GuardAdapter().guard_action(
+        AgentAction(kind="write_file", target=str(tmp_path / "harmless-looking" / "policy.py")),
+        AGENT_ON_ITS_OWN,
+    )
+    assert decision.reason_code is ReasonCode.SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER
+
+
+def test_hermes_asks_before_a_file_tool_rewrites_the_guard(isolated_plugin, hermes_reads):
+    result = isolated_plugin.guard_tool_call(
+        tool_name="write_file",
+        args={"path": str(PACKAGE_DIR / "policy.py"), "content": "def decide_action(*a): ..."},
+        session_id="s1", turn_id="turn-1",
+    )
+    assert result["reason_code"] == "SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER"
+    assert hermes_reads(result) == "approve"
