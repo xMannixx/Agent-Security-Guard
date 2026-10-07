@@ -110,6 +110,7 @@ class ReasonCode(str, Enum):
     SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER = "SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER"
     SELF_MODIFICATION_REQUIRES_EXPLICIT_TARGET = "SELF_MODIFICATION_REQUIRES_EXPLICIT_TARGET"
     SELF_MODIFICATION_REQUIRES_CONFIRMATION = "SELF_MODIFICATION_REQUIRES_CONFIRMATION"
+    SELF_MODIFICATION_TARGET_OUTSIDE_WORKSPACE = "SELF_MODIFICATION_TARGET_OUTSIDE_WORKSPACE"
 
     # local file writes by host file tools (write_file, patch, ...)
     LOCAL_WRITE_AUDITED = "LOCAL_WRITE_AUDITED"
@@ -357,6 +358,8 @@ class GuardContext:
     user_intent_origin: UserIntentOrigin = UserIntentOrigin.UNKNOWN
     current_channel: str = ""
     chain_id: Optional[str] = None
+    # The directory a self-modification may write into (where the agent's
+    # skills live). A target outside it is denied. None: not confined.
     workspace_root: Optional[str] = None
     domain_allowlist: List[str] = field(default_factory=list)
     recent_events: List["GuardEvent"] = field(default_factory=list)

@@ -934,3 +934,63 @@ def test_next_turn_after_a_secret_read_browses_freely(isolated_plugin):
         )
     ]
     assert payloads[1]["allowed"] is True, payloads[1]
+
+
+# --------------------------------------------------------------------------- #
+# 15. Confining self-modification must not get in the way of patching a skill
+# --------------------------------------------------------------------------- #
+
+SKILLS_ROOT = "/home/u/.hermes/skills"
+
+
+@pytest.mark.parametrize("target", [
+    "communication-style/SKILL.md",
+    "/home/u/.hermes/skills/communication-style/SKILL.md",
+    "/home/u/.hermes/skills/new/skill/SKILL.md",
+    "rule-17",                                  # a rule id, not a path
+])
+def test_self_modification_inside_the_workspace_root_reaches_confirmation(target):
+    decision = GuardAdapter().guard_action(
+        AgentAction(kind="self_improvement_patch", target=target),
+        GuardContext(
+            origin_trust=OriginTrust.TRUSTED_USER,
+            user_intent_origin=UserIntentOrigin.HUMAN_EXPLICIT,
+            workspace_root=SKILLS_ROOT,
+        ),
+    )
+    assert decision.reason_code is ReasonCode.SELF_MODIFICATION_REQUIRES_CONFIRMATION
+
+
+@pytest.mark.parametrize("target", ["/etc/hosts", "../notes.md", "~/.bashrc", "/tmp/build/out.txt"])
+def test_workspace_root_confines_self_modification_only(target):
+    # An ordinary file write goes wherever the user's work takes it.
+    decision = GuardAdapter().guard_action(
+        AgentAction(kind="write_file", target=target),
+        GuardContext(origin_trust=OriginTrust.TRUSTED_USER, workspace_root=SKILLS_ROOT),
+    )
+    assert decision.decision is Decision.ALLOW_WITH_WARNING
+    assert decision.reason_code is ReasonCode.LOCAL_WRITE_AUDITED
+
+
+def test_without_a_workspace_root_a_patch_is_not_confined():
+    decision = GuardAdapter().guard_action(
+        AgentAction(kind="self_improvement_patch", target="/anywhere/SKILL.md"),
+        GuardContext(
+            origin_trust=OriginTrust.TRUSTED_USER,
+            user_intent_origin=UserIntentOrigin.HUMAN_EXPLICIT,
+        ),
+    )
+    assert decision.reason_code is ReasonCode.SELF_MODIFICATION_REQUIRES_CONFIRMATION
+
+
+def test_patch_that_deletes_a_file_is_not_taken_for_a_write_to_dev_null():
+    body = "--- a/old/SKILL.md\n+++ /dev/null\n@@\n-gone\n"
+    decision = GuardAdapter().guard_action(
+        AgentAction(kind="skill_patch", target="old/SKILL.md", payload=body),
+        GuardContext(
+            origin_trust=OriginTrust.TRUSTED_USER,
+            user_intent_origin=UserIntentOrigin.HUMAN_EXPLICIT,
+            workspace_root=SKILLS_ROOT,
+        ),
+    )
+    assert decision.reason_code is ReasonCode.SELF_MODIFICATION_REQUIRES_CONFIRMATION

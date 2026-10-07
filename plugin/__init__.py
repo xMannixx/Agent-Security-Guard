@@ -681,6 +681,7 @@ def _extract_context(kwargs: Dict[str, Any], adapter) -> GuardContext:
         current_channel=kwargs.get("channel", ""),
         # Hermes sends no chain_id but a turn_id: one user turn is one chain.
         chain_id=kwargs.get("chain_id") or kwargs.get("turn_id") or None,
+        workspace_root=_workspace_root(kwargs),
         domain_allowlist=config.domain_allowlist,
         config=config,
         no_write_scope_active=no_write,
@@ -692,6 +693,12 @@ def _extract_context(kwargs: Dict[str, Any], adapter) -> GuardContext:
             kwargs.get("action_from_nonuser_context", False)
         ),
     )
+
+
+def _workspace_root(kwargs: Dict[str, Any]) -> Optional[str]:
+    """The directory a self-modification is confined to, if the host names one."""
+    root = kwargs.get("workspace_root")
+    return root if isinstance(root, str) and root.strip() else None
 
 
 def _scope_flags(kwargs: Dict[str, Any], config=None) -> tuple:

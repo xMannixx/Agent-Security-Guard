@@ -17,7 +17,7 @@ import ipaddress
 import os
 import re
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 from . import _miniyaml
 from .actions import recognized_by_name_only, sends_to_remote
@@ -620,6 +620,17 @@ def _decide_self_modification(
     ``self_improvement.py``). ``require_confirmation`` is a pending intent,
     not a write grant.
     """
+    # First, because the denial for a missing user order is one a host may
+    # answer with an approval prompt, and no approval makes this target right.
+    if any(
+        outside_workspace(path, context.workspace_root)
+        for path in _written_paths(action)
+    ):
+        return _deny(
+            ReasonCode.SELF_MODIFICATION_TARGET_OUTSIDE_WORKSPACE,
+            "Self-modification target lies outside the workspace root the "
+            "host named; denied.",
+        )
     authorized = context.user_intent_origin is UserIntentOrigin.HUMAN_EXPLICIT or (
         context.user_intent_origin is UserIntentOrigin.HUMAN_CONFIRMATION
         and context.previous_action_was_explicitly_authorized
@@ -642,6 +653,35 @@ def _decide_self_modification(
         "Self-modification authorized in principle; requires explicit "
         "confirmation bound to this exact patch before any write.",
     )
+
+
+def outside_workspace(
+    target: str, root: Optional[str], *, follow_links: bool = False
+) -> bool:
+    """Whether ``target`` names a path outside ``root``.
+
+    ``..`` segments, an absolute path and a ``file:`` URL are resolved before
+    comparing, so ``skills/../../.bashrc`` is outside ``skills``. A relative
+    target is taken relative to the root, which also keeps a target that is no
+    path at all (a rule id) inside. No root means nothing to be outside of.
+
+    By default the comparison is on the names alone and touches no file. With
+    ``follow_links`` symbolic links are resolved too; that is for the moment
+    right before a write, where a link inside the root may point out of it.
+    """
+    root = (root or "").strip()
+    path = (target or "").strip()
+    if not root or not path:
+        return False
+    if path.lower().startswith("file:"):
+        path = unquote(urlsplit(path).path)
+    resolve = os.path.realpath if follow_links else os.path.abspath
+    try:
+        base = resolve(os.path.expanduser(root))
+        full = resolve(os.path.join(base, os.path.expanduser(path)))
+        return os.path.commonpath([base, full]) != base
+    except (OSError, ValueError):  # unreadable, or nothing in common at all
+        return True
 
 
 def _decide_local_read(context: GuardContext) -> GuardDecision:
@@ -700,7 +740,8 @@ def _written_paths(action: AgentAction) -> List[str]:
     for text in texts:
         if isinstance(text, str) and ("***" in text or "+++" in text):
             paths.extend(_PATCH_PATH.findall(text))
-    return [path for path in paths if path]
+    # `+++ /dev/null` is how a diff says "deleted", not a file it writes.
+    return [path for path in paths if path and path != "/dev/null"]
 
 
 def _changes_the_agent(action: AgentAction, context: GuardContext) -> bool:

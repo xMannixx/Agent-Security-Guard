@@ -131,3 +131,56 @@ def test_self_modification_never_directly_allows():
     for intent in UserIntentOrigin:
         d = decide_action(action, ActionTier.SELF_MODIFICATION, ctx(user_intent_origin=intent))
         assert d.decision is not Decision.ALLOW, intent
+
+
+# workspace_root: a field nothing read. Where the host names the directory a
+# self-modification may write into, a target outside it is denied.
+
+
+def test_target_outside_the_workspace_root_is_denied():
+    action = _patch("../../.bashrc")
+    d = decide_action(
+        action, classify_action(action),
+        ctx(user_intent_origin=UserIntentOrigin.HUMAN_EXPLICIT, workspace_root="/home/u/.hermes/skills"),
+    )
+    assert d.decision is Decision.DENY
+    assert d.reason_code is ReasonCode.SELF_MODIFICATION_TARGET_OUTSIDE_WORKSPACE
+
+
+def test_outside_the_workspace_is_not_a_denial_an_approval_can_lift():
+    # Without a user order the denial is REQUIRES_EXPLICIT_USER_ORDER, which a
+    # host may answer with an approval prompt. A target outside the workspace
+    # must not get that far.
+    action = _patch("/etc/cron.d/agent")
+    d = decide_action(
+        action, classify_action(action), ctx(workspace_root="/home/u/.hermes/skills")
+    )
+    assert d.reason_code is ReasonCode.SELF_MODIFICATION_TARGET_OUTSIDE_WORKSPACE
+
+
+def test_file_tool_writing_a_skill_file_outside_the_workspace_root_is_denied():
+    action = AgentAction(kind="write_file", target="/tmp/elsewhere/SKILL.md")
+    d = decide_action(
+        action, classify_action(action),
+        ctx(user_intent_origin=UserIntentOrigin.HUMAN_EXPLICIT, workspace_root="/home/u/.hermes/skills"),
+    )
+    assert d.reason_code is ReasonCode.SELF_MODIFICATION_TARGET_OUTSIDE_WORKSPACE
+
+
+def test_patch_body_naming_a_skill_file_outside_the_workspace_root_is_denied():
+    body = "*** Begin Patch\n*** Update File: ../../other/SKILL.md\n@@\n-a\n+b\n*** End Patch"
+    action = AgentAction(kind="apply_patch", metadata={"patch": body})
+    d = decide_action(
+        action, classify_action(action),
+        ctx(user_intent_origin=UserIntentOrigin.HUMAN_EXPLICIT, workspace_root="/home/u/.hermes/skills"),
+    )
+    assert d.reason_code is ReasonCode.SELF_MODIFICATION_TARGET_OUTSIDE_WORKSPACE
+
+
+def test_plugin_passes_the_workspace_root_on(isolated_plugin, hermes_reads):
+    result = isolated_plugin.guard_tool_call(
+        tool_name="write_file", args={"path": "/tmp/elsewhere/SKILL.md", "content": "x"},
+        workspace_root="/home/u/.hermes/skills",
+    )
+    assert result["reason_code"] == "SELF_MODIFICATION_TARGET_OUTSIDE_WORKSPACE"
+    assert hermes_reads(result) == "block"
