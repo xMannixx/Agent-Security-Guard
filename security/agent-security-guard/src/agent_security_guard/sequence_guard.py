@@ -183,7 +183,7 @@ def check_sequence(
 
     if (
         SequenceCategory.SECRET_READ in past_categories
-        and tier in (ActionTier.READ_ONLY, ActionTier.DOWNLOAD)
+        and tier in (ActionTier.READ_ONLY, ActionTier.DOWNLOAD, ActionTier.UNKNOWN)
         and carries_data_out(action)
     ):
         # A GET with a query string moves data out just as a POST does, and the

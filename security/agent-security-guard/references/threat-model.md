@@ -64,9 +64,18 @@ values and credential files, not of words: a broader net marks ordinary
 project files and ordinary text as secret and then denies the work that
 follows, which is how 0.2.x failed.
 
+Where the guard looks matters as much. The request rules read the URL from
+`target` and applied to the guard's own request kinds, while a host's web
+tools take `urls` or `query` and are unrecognized kinds: in Hermes a secret in
+a `web_extract` URL was not looked at, and neither was a data-carrying URL
+after `.env` had been read. The URLs of a call are now read from its arguments
+too, both rules apply to an unrecognized tool that names a remote URL, and
+every argument of a web, search or browser tool is checked.
+
 Not covered: a secret that is encoded before it is sent (the rule for
-data-carrying requests after a secret read exists for that), a secret read
-through a shell command, and a credential format nobody listed.
+data-carrying requests after a secret read exists for that), a search query
+after a secret read (asking there would end "reading stays free"), a secret
+read or sent through a shell command, and a credential format nobody listed.
 
 ## Memory lanes
 

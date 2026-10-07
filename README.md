@@ -100,8 +100,8 @@ defaults with `config_error` in its decisions).
 | external write (default) | `require_confirmation` | `EXTERNAL_WRITE_REQUIRES_CONFIRMATION` |
 | external write to loopback / allowlisted domain, trusted origin | `allow` | `ALLOW_DEFAULT` |
 | external write of secret-class content | `deny` | `SECRET_EXTERNAL_SEND` |
-| any request to a remote host with a secret in its URL, query or body (GET included) | `deny` | `SECRET_EXTERNAL_SEND` |
-| after a secret read: GET-like request with a query string, URL credentials or a body | `require_confirmation` | `SECRET_THEN_EXFIL` |
+| any request to a remote host with a secret in its URL, query or body (GET included), also through the host's own web, search and browser tools | `deny` | `SECRET_EXTERNAL_SEND` |
+| after a secret read: GET-like request with a query string, URL credentials or a body, also through the host's own web tools | `require_confirmation` | `SECRET_THEN_EXFIL` |
 | untrusted web/doc -> file write (`write_file`, `patch`, ...) | `deny` | `UNTRUSTED_TO_LOCAL_WRITE` |
 | file write from a trusted origin | `allow_with_warning` | `LOCAL_WRITE_AUDITED` |
 | file tool writing `SKILL.md` / `guard.yaml` | as self-modification | `SELF_MODIFICATION_...` |
@@ -184,7 +184,8 @@ line in there unasked. Declare a memory tool with another name as
 ## What counts as a secret
 
 Two lists in `guard.yaml` decide it. `secret_patterns` are matched against what
-a request sends, its URL and its body: API keys and tokens by their prefix
+a request sends, its URL and its body, and for a web, search or browser tool
+every argument (the query, the text typed into a page): API keys and tokens by their prefix
 (`AKIA`, `ghp_`, `github_pat_`, `glpat-`, `sk-`, `sk-ant-`, `sk-proj-`,
 `xox?-`), `name = value` pairs for `api_key`, `secret_key`, `access_token`,
 `password` and `secret_access_key` (also as quoted JSON names), bearer tokens,

@@ -150,7 +150,9 @@ memory_lanes: {}
 
 # Tools whose result is content from outside the machine (glob patterns over
 # the tool name). Their results are wrapped as data, and after one of them the
-# `after_untrusted_content` rule above applies for the rest of the chain. Any
+# `after_untrusted_content` rule above applies for the rest of the chain. What
+# goes into such a tool goes outside too, so all of its arguments are checked
+# for secrets. Any
 # read of a remote URL counts as well. Add your own, e.g. "mcp_*" or an email
 # reader. This list replaces the built-in one, so keep what you still want.
 untrusted_content_tools:
