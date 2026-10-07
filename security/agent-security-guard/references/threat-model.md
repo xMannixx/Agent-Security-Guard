@@ -34,7 +34,7 @@ Each class maps to a deterministic outcome, covered by
 | 5 | Supply-chain instruction | Untrusted content says "install this skill/package" | Install from untrusted is denied; from a user it requires confirmation | `INSTALL_FROM_UNTRUSTED` |
 | 6 | Unexpected code execution | Web -> shell, or download -> execute | Untrusted -> execution denied; untrusted download -> execute denied (user download -> confirm) | `UNTRUSTED_TO_SHELL`, `DOWNLOAD_THEN_EXECUTE` |
 | 7 | Unauthorized self-modification | Agent patches its own `SKILL.md` / procedural rules without an explicit user order, or off a bare "yes" / under a no-write scope; or the user confirms one patch and another is written | `SELF_MODIFICATION` tier is never a direct allow; no-write scope and ambiguous-confirmation gates deny first; a write needs an explicit, hash-bound confirmation (two-phase), the hash taken from what is written; with `workspace_root` the target is confined to it | `EXPLICIT_NO_WRITE_SCOPE_VIOLATION`, `SHORT_CONFIRMATION_NO_PRIOR_AUTH`, `SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER`, `SELF_MODIFICATION_TARGET_OUTSIDE_WORKSPACE` |
-| 8 | Neutralizing the guard | No rule is beaten; the guard is made to skip it: tool arguments shaped so the evaluation raises, an audit write that fails, a `guard.yaml` planted in the workspace, `AGENT_SECURITY_GUARD_MODE` flipped at runtime | Inputs are normalized before evaluation; an audit failure never replaces a decision; an evaluation error blocks state-changing kinds; policy is read only from operator locations, never the working directory; the mode is fixed when the guard starts | the rule's own code, or `GUARD_DEGRADED_DANGEROUS_KIND` |
+| 8 | Neutralizing the guard | No rule is beaten; the guard is made to skip it: tool arguments shaped so the evaluation raises, an audit write that fails, a `guard.yaml` planted in the workspace, `AGENT_SECURITY_GUARD_MODE` flipped at runtime; or nobody attacks at all and the policy that runs is not the one the operator wrote | Inputs are normalized before evaluation; an audit failure never replaces a decision; an evaluation error blocks state-changing kinds; policy is read only from operator locations, never the working directory; the mode is fixed when the guard starts; a policy file is applied as written or refused whole, with every entry named | the rule's own code, or `GUARD_DEGRADED_DANGEROUS_KIND` |
 
 ## Content in context
 
@@ -51,6 +51,29 @@ change, external write, self-modification or a write by a host's memory tool
 the content is there, not that the content proposed the action. Reads stay
 free, tools the guard cannot classify stay free, and an action the host reports
 as explicitly ordered by the user is not asked about.
+
+## The policy that runs
+
+A policy file is how an operator tightens the guard, so reading it wrongly
+weakens the guard without anyone attacking it. The loader used to take a file
+as far as it could and fill in the rest: a list written on one line
+(`sensitive_paths: [".env"]`) became the text `[".env"]` and then its single
+characters, which match no file; of two entries with the same key the later
+one won; an unknown `mode` ran as the default mode; an unknown
+`audit.backend` recorded nothing; a pattern that does not compile was left
+out; a misspelled setting was ignored and the built-in value stayed.
+
+Now a file is applied as written or not at all. One-line lists and mappings
+are read as what they are, and anything the guard cannot apply (an unknown
+setting, an unusable value, a key given twice) makes `load_config` raise with
+every such entry in the message. The plugin then runs on the built-in
+defaults and reports the entries in its log, in `config_error` on its
+decisions and in `guard_status()`. A mistyped `AGENT_SECURITY_GUARD_MODE` no
+longer replaces the configured mode; it is ignored with a warning.
+
+What this does not do: tell the operator in the conversation. In a host that
+shows neither the log nor `config_error`, a refused file is noticed only by
+its settings not being in force.
 
 ## What the guard takes for a secret
 

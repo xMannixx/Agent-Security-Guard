@@ -32,10 +32,13 @@ stdlib-only.
 from __future__ import annotations
 
 import dataclasses
+import logging
 import os
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from .types import Decision, GuardDecision, ReasonCode
+
+logger = logging.getLogger(__name__)
 
 MODE_MONITOR = "monitor"
 MODE_AUTONOMOUS_SAFE = "autonomous-safe"
@@ -79,6 +82,17 @@ def normalize_mode(mode: Optional[str]) -> str:
     return _MODE_ALIASES.get(value, DEFAULT_MODE)
 
 
+def is_known_mode(mode: Any) -> bool:
+    """Whether a value names a mode, by its name or by an accepted alias.
+
+    ``normalize_mode`` turns anything else into the default mode, which is
+    right for a value met at run time and wrong for a policy file: there the
+    operator asked for something and has to be told they did not get it.
+    """
+    value = str(mode).strip().lower() if isinstance(mode, str) else ""
+    return value in KNOWN_MODES or value in _MODE_ALIASES
+
+
 MODE_SOURCE_ENV = "env"
 MODE_SOURCE_CONFIG = "config"
 
@@ -92,7 +106,15 @@ def mode_with_source(configured: Optional[str]) -> Tuple[str, str]:
     """
     override = os.environ.get(MODE_ENV_VAR)
     if override and override.strip():
-        return normalize_mode(override), MODE_SOURCE_ENV
+        if is_known_mode(override):
+            return normalize_mode(override), MODE_SOURCE_ENV
+        # A typo here used to select the default mode over the configured
+        # one. The override said nothing the guard can act on, so it does not
+        # apply, and that is said.
+        logger.warning(
+            "%s=%r is not a mode (monitor, autonomous-safe, strict); "
+            "keeping the configured mode", MODE_ENV_VAR, override,
+        )
     return normalize_mode(configured), MODE_SOURCE_CONFIG
 
 

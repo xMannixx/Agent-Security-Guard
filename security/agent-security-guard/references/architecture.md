@@ -60,6 +60,7 @@ flowchart TD
 |---|---|
 | `types.py` | Enums + dataclasses (the shared vocabulary) |
 | `_miniyaml.py` | Conservative stdlib YAML-subset loader |
+| `config_check.py` | Names every entry of a policy file that cannot be applied as written |
 | `policy.py` | Defaults, config load, predicates, `decide_action` matrix |
 | `actions.py` | `classify_action` (declared tier / kind / host tool name / method -> tier) |
 | `host_tools.py` | Names real hosts give their tools, mapped to tiers |

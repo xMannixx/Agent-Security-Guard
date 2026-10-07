@@ -1,4 +1,5 @@
 import os
+import re
 
 import pytest
 
@@ -14,6 +15,7 @@ from agent_security_guard import (
     decide_action,
     domain_allowed,
     load_config,
+    normalize_mode,
     path_is_sensitive,
 )
 from secret_samples import CREDENTIAL_FILES, FILES_THAT_ONLY_SOUND_SECRET
@@ -453,6 +455,121 @@ def test_shipped_guard_yaml_lists_what_the_defaults_list():
     assert shipped.sensitive_paths == defaults.sensitive_paths
     assert shipped.untrusted_content_tools == defaults.untrusted_content_tools
     assert shipped.self_modification_paths == defaults.self_modification_paths
+
+
+def _policy(tmp_path, text):
+    path = tmp_path / "guard.yaml"
+    path.write_text(text, encoding="utf-8")
+    return str(path)
+
+
+# What the loader used to replace with something else, without a word.
+
+
+def test_list_written_on_one_line_is_not_taken_apart_into_characters(tmp_path):
+    cfg = load_config(_policy(tmp_path, 'sensitive_paths: [".env", "*.pem", "prod-secrets/"]\n'))
+    assert cfg.sensitive_paths == [".env", "*.pem", "prod-secrets/"]
+    assert path_is_sensitive("/proj/.env", cfg.sensitive_paths) is True
+
+
+@pytest.mark.parametrize("key", [
+    "sensitive_paths", "secret_patterns", "domain_allowlist",
+    "self_modification_paths", "untrusted_content_tools",
+])
+@pytest.mark.parametrize("value", ['".env"', "", "true", "3", "{a: b}"])
+def test_text_where_a_list_belongs_raises(tmp_path, key, value):
+    with pytest.raises(ValueError, match=key):
+        load_config(_policy(tmp_path, f"{key}: {value}\n"))
+
+
+@pytest.mark.parametrize("text,names", [
+    ("mode: stict\n", "stict"),
+    ("mode: 3\n", "mode"),
+    ("mode:\n", "mode"),
+    ("on_error: deny-all\n", "deny-all"),
+    ("audit:\n  backend: sqllite\n", "sqllite"),
+    ("audit:\n  backend: csv\n", "csv"),
+    ("audit:\n  pth: x.db\n", "pth"),
+    ('secret_patterns:\n  - "AKIA[0-9A-Z]{16}"\n  - "(unclosed"\n', "unclosed"),
+    ("secret_patterns: ['[a-']\n", "secret_patterns"),
+    ("sensitve_paths:\n  - .env\n", "sensitve_paths"),
+    ("tiers:\n  shel_from_user: deny\n", "shel_from_user"),
+    ("tiers:\n  external_write: denny\n", "denny"),
+    ("tiers:\n  external_write: true\n", "external_write"),
+    ("tiers: deny\n", "tiers"),
+    ("scope_from_text: maybe\n", "scope_from_text"),
+    ("wrap_tool_results: 0\n", "wrap_tool_results"),
+    ("limits:\n  chain_window: twelve\n", "chain_window"),
+    ("limits:\n  chain_window: 0\n", "chain_window"),
+    ("limits:\n  chain_windw: 12\n", "chain_windw"),
+    ("limits:\n  max_content_chars: -1\n", "max_content_chars"),
+    ("sensitive_paths:\n  - [a, b]\n", "sensitive_paths"),
+    ("mode: strict\nmode: monitor\n", "mode"),
+])
+def test_entry_that_cannot_be_applied_as_written_raises(tmp_path, text, names):
+    with pytest.raises(ValueError, match=re.escape(names)):
+        load_config(_policy(tmp_path, text))
+
+
+def test_every_problem_is_named_at_once(tmp_path):
+    text = "mode: stict\ntiers:\n  shel_from_user: deny\naudit:\n  backend: csv\n"
+    with pytest.raises(ValueError) as raised:
+        load_config(_policy(tmp_path, text))
+    message = str(raised.value)
+    assert "3 entries" in message
+    for part in ("stict", "shel_from_user", "did you mean 'shell_from_user'", "csv"):
+        assert part in message
+
+
+def test_valid_file_in_every_spelling_the_loader_accepts(tmp_path):
+    cfg = load_config(_policy(tmp_path, """---
+mode: Strict
+on_error: deny_all
+scope_from_text: yes
+wrap_tool_results: off
+domain_allowlist: [example.com, "api.github.com"]
+sensitive_paths:
+  - .env
+  - 8080
+tiers:
+  external_write: Deny
+  shell_from_user: allow_with_warning
+limits:
+  chain_window: 20
+audit:
+  backend: none
+tool_tiers: {memory: unknown}
+memory_lanes:
+  notes: evidence
+"""))
+    assert normalize_mode(cfg.mode) == "strict"
+    assert cfg.on_error == "deny_all"
+    assert cfg.scope_from_text is True
+    assert cfg.wrap_tool_results is False
+    assert cfg.domain_allowlist == ["example.com", "api.github.com"]
+    assert cfg.sensitive_paths == [".env", "8080"]
+    assert cfg.tiers["external_write"] == "deny"
+    assert cfg.tiers["read_only"] == "allow"            # untouched default
+    assert cfg.limits["chain_window"] == 20
+    assert cfg.limits["max_content_chars"] == 20000     # untouched default
+    assert cfg.audit["backend"] == "none"
+    assert cfg.tool_tiers == {"memory": "unknown"}
+    assert cfg.memory_lanes == {"notes": "evidence"}
+
+
+@pytest.mark.parametrize("word,expected", [
+    ("true", True), ("yes", True), ("on", True), ("True", True),
+    ("false", False), ("no", False), ("off", False), ("No", False),
+])
+def test_no_means_no(tmp_path, word, expected):
+    # bool("no") is True: the switch used to be on for every word but nothing.
+    cfg = load_config(_policy(tmp_path, f"scope_from_text: {word}\n"))
+    assert cfg.scope_from_text is expected
+
+
+@pytest.mark.parametrize("mode", ["monitor", "autonomous-safe", "strict", "off", "safe", "enforce"])
+def test_every_mode_name_and_alias_loads(tmp_path, mode):
+    assert load_config(_policy(tmp_path, f"mode: {mode}\n")).mode == mode
 
 
 def test_malformed_config_raises(tmp_path):

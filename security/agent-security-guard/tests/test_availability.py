@@ -18,6 +18,7 @@ from agent_security_guard import (
     MODE_MONITOR,
     MODE_STRICT,
     AgentAction,
+    AuditLog,
     DataSensitivity,
     Decision,
     GuardAdapter,
@@ -994,3 +995,76 @@ def test_patch_that_deletes_a_file_is_not_taken_for_a_write_to_dev_null():
         ),
     )
     assert decision.reason_code is ReasonCode.SELF_MODIFICATION_REQUIRES_CONFIRMATION
+
+
+# --------------------------------------------------------------------------- #
+# 16. Checking the policy file must not turn a working file into an outage
+# --------------------------------------------------------------------------- #
+
+
+def _write_policy(tmp_path, text):
+    policy = tmp_path / "home" / ".hermes" / "guard.yaml"
+    policy.parent.mkdir(parents=True, exist_ok=True)
+    policy.write_text(text, encoding="utf-8")
+    return policy
+
+
+def test_shipped_policy_file_passes_the_check():
+    import os
+
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    load_config(os.path.join(repo_root, "guard.yaml"))
+
+
+def test_file_that_only_sets_a_few_things_loads(tmp_path):
+    policy = _write_policy(tmp_path, "mode: monitor\ntiers:\n  after_untrusted_content: allow_with_warning\n")
+    config = load_config(str(policy))
+    assert config.mode == "monitor"
+    assert config.tiers["after_untrusted_content"] == "allow_with_warning"
+    assert ".env" in config.sensitive_paths
+
+
+def test_tiers_listed_for_transparency_can_stay_in_the_file(tmp_path):
+    # The shipped file lists the non-tunable tiers; an operator's copy has them.
+    policy = _write_policy(
+        tmp_path,
+        "tiers:\n  shell_from_untrusted: deny\n  memory_external_to_authorization: deny\n",
+    )
+    assert load_config(str(policy)).tiers["shell_from_untrusted"] == "deny"
+
+
+def test_refused_policy_file_is_not_an_outage(isolated_plugin, tmp_path):
+    # A typo makes the file unusable, not the host: built-in rules, reads free.
+    _write_policy(tmp_path, "mode: stict\n")
+    read = isolated_plugin.guard_tool_call(tool_name="read_file", args={"path": "a.txt"})
+    assert read["allowed"] is True
+    shell = isolated_plugin.guard_tool_call(tool_name="terminal", args={"command": "ls"})
+    assert shell["allowed"] is True
+
+
+def test_documented_one_line_forms_work_in_the_plugin(isolated_plugin, tmp_path):
+    # README and guard.yaml write `tool_tiers: {memory: unknown}`.
+    _write_policy(tmp_path, "tool_tiers: {memory: unknown}\ndomain_allowlist: [api.example.com]\n")
+    isolated_plugin.guard_tool_call(tool_name="web_extract", args={}, session_id="s", turn_id="t")
+    memory = isolated_plugin.guard_tool_call(
+        tool_name="memory", args={"action": "add"}, session_id="s", turn_id="t"
+    )
+    assert memory["allowed"] is True, memory
+    assert "config_error" not in memory
+
+
+def test_mode_override_still_switches_to_monitor(monkeypatch):
+    for word in ("monitor", "off", "MONITOR", " report "):
+        monkeypatch.setenv("AGENT_SECURITY_GUARD_MODE", word)
+        assert GuardAdapter().mode == MODE_MONITOR, word
+
+
+def test_audit_can_be_switched_off_on_purpose(tmp_path):
+    policy = _write_policy(tmp_path, "audit:\n  backend: none\n")
+    config = load_config(str(policy))
+    adapter = GuardAdapter(config=config, audit=AuditLog(config=config))
+    decision = adapter.guard_action(
+        AgentAction(kind="shell", target="x"), GuardContext(origin_trust=OriginTrust.EXTERNAL_WEB)
+    )
+    assert decision.decision is Decision.DENY
+    assert adapter.audit_failures == 0
