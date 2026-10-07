@@ -68,6 +68,9 @@ including `test_availability.py`, passes unchanged.
   (`SECRET_EXTERNAL_SEND`), and after a secret read a request that has room for
   data (query string, credentials in the URL, a body) needs confirmation
   (`tiers.read_with_data_after_secret`). A plain GET stays free.
+- **A page can no longer stall the scanner.** Two detector patterns took time
+  quadratic in the input: 64 KB of `<!--` cost 16 s, and blank lines did the
+  same to the role-header check. Both are linear now (1 MB in about 0.2 s).
 - **Content can no longer break out of the data block.** Markers were escaped
   by a single text replacement, so `<<<<<END_UNTRUSTED_DATA>>>>>` left a real
   end marker behind, and lower-case or spaced variants passed untouched. The

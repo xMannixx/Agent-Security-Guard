@@ -17,13 +17,42 @@ import re
 from typing import List, Pattern, Tuple
 
 
+class _HtmlCommentDirective:
+    """A directive hidden in an HTML comment.
+
+    Walks the comments one at a time, each exactly once, so the cost is linear
+    in the text. The single regex this replaces rescanned to the end of the
+    text from every ``<!--``: a page of 64 KB of comment openers took 16 s, and
+    this runs on every page an agent reads.
+    """
+
+    _DIRECTIVE = re.compile(
+        r"(?is)instruction|system\s*:|ignore\s+previous|do\s+not\s+tell"
+    )
+
+    def search(self, text: str):
+        start = text.find("<!--")
+        while start != -1:
+            end = text.find("-->", start + 4)
+            if end == -1:
+                return None
+            found = self._DIRECTIVE.search(text, start + 4, end)
+            if found:
+                return found
+            start = text.find("<!--", end + 3)
+        return None
+
+
 # Prompt-injection + social-engineering directives. The point of detection is
 # to flag content that *tries to act like an instruction*.
 INJECTION_PATTERNS: List[Tuple[str, Pattern]] = [
     ("ignore_previous", re.compile(r"(?i)ignore\s+(all\s+)?(the\s+)?previous(\s+instructions?)?")),
     ("disregard_above", re.compile(r"(?i)disregard\s+(all\s+)?(the\s+)?(previous|above|prior|earlier)")),
     ("forget_instructions", re.compile(r"(?i)forget\s+(all\s+)?(your\s+)?(previous\s+)?instructions?")),
-    ("fake_role_header", re.compile(r"(?im)^\s*(system|developer|assistant)\s*:")),
+    # [ \t], not \s: \s also eats the line breaks, so from every line start the
+    # match ran on through all blank lines below it (quadratic on a page of
+    # newlines).
+    ("fake_role_header", re.compile(r"(?im)^[ \t]*(system|developer|assistant)[ \t]*:")),
     ("you_are_now", re.compile(r"(?i)\byou\s+are\s+now\b")),
     ("new_instructions", re.compile(r"(?i)\bnew\s+instructions?\b")),
     ("override_rules", re.compile(r"(?i)\boverride\b[^.\n]{0,40}(instructions?|rules?|policy|policies)")),
@@ -37,7 +66,7 @@ INJECTION_PATTERNS: List[Tuple[str, Pattern]] = [
     ("include_in_next_call", re.compile(r"(?i)include\s+th(is|e\s+following)\b[^.\n]{0,60}(tool\s+call|request|response|prompt)")),
     ("for_accurate_include", re.compile(r"(?i)for\s+(accurate|correct|proper)\b[^.\n]{0,40}\binclude\b")),
     ("exfiltrate", re.compile(r"(?i)\bexfiltrat")),
-    ("html_comment_directive", re.compile(r"(?is)<!--[^>]*?(instruction|system\s*:|ignore\s+previous|do\s+not\s+tell)[^>]*?-->")),
+    ("html_comment_directive", _HtmlCommentDirective()),
 ]
 
 # Shell / code-execution payloads embedded in content.
