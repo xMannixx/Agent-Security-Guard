@@ -181,6 +181,24 @@ page, denied when untrusted content proposed the write. Hermes puts what
 line in there unasked. Declare a memory tool with another name as
 `memory_write` in `tool_tiers`; `memory: unknown` takes one out of the rules.
 
+## The audit trail
+
+Every decision is recorded, the plain allows too (`audit.log_allows: false`
+keeps only warnings, confirmations and denials). The trail lives in the
+guard's state directory, `~/.local/state/agent-security-guard/` (or under
+`$XDG_STATE_HOME`), not in the working directory, and is created for its owner
+alone (`0600`). A file tool that targets it is held to the same bar as one
+that targets `guard.yaml`.
+
+Each record carries the hash of the record before it. `audit --verify` walks
+that chain and fails when a record was edited, removed from the middle or the
+start, or put in afterwards. What it cannot show: that the newest records were
+cut off, or that someone who can write the file computed the whole chain anew.
+It prints the hash of the newest record (`head`); keep a copy elsewhere if you
+need to catch that. The agent runs as your user and can reach the file through
+a shell, so the trail is evidence against a careless change, not against a
+determined one.
+
 ## What counts as a secret
 
 Two lists in `guard.yaml` decide it. `secret_patterns` are matched against what
@@ -258,6 +276,7 @@ advice = guard.advise_memory("server runs ubuntu", "authorization", "external")
 python -m agent_security_guard scan <file-or-text> --source-kind web_fetch --wrap
 python -m agent_security_guard check-action --json action.json
 python -m agent_security_guard audit --last 50
+python -m agent_security_guard audit --verify      # was the trail changed? exit 1 if so
 ```
 
 ### Hermes / OpenClaw plugin

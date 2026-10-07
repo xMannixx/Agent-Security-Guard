@@ -76,3 +76,42 @@ def test_policy_file_that_cannot_be_applied_is_an_error_not_a_traceback(tmp_path
     assert rc == 2
     assert captured.out == ""
     assert "stict" in captured.err
+
+
+def _trail(tmp_path):
+    from agent_security_guard import AgentAction, AuditLog, GuardContext, OriginTrust, build_event, check_action
+
+    db = tmp_path / "audit.db"
+    log = AuditLog(backend="sqlite", path=str(db))
+    decision = check_action(
+        AgentAction(kind="shell", target="x"), GuardContext(origin_trust=OriginTrust.EXTERNAL_WEB)
+    )
+    for i in range(3):
+        log.record(build_event(f"e{i}", decision))
+    log.close()
+    return db
+
+
+def test_audit_verify_passes_on_an_untouched_trail(tmp_path, capsys):
+    db = _trail(tmp_path)
+    rc = main(["audit", "--verify", "--db", str(db), "--backend", "sqlite"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert out["ok"] is True
+    assert out["records"] == 3
+    assert len(out["head"]) == 64
+
+
+def test_audit_verify_fails_on_a_changed_trail(tmp_path, capsys):
+    import sqlite3
+
+    db = _trail(tmp_path)
+    connection = sqlite3.connect(str(db))
+    connection.execute("UPDATE events SET decision = 'allow' WHERE id = 2")
+    connection.commit()
+    connection.close()
+    rc = main(["audit", "--verify", "--db", str(db), "--backend", "sqlite"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 1
+    assert out["ok"] is False
+    assert "record 2" in out["problem"]

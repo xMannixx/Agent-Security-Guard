@@ -114,7 +114,9 @@ def problems(
             found.append(
                 f"audit.backend: '{value}' is not one of {', '.join(AUDIT_BACKENDS)}"
             )
-        elif key != "backend" and not (isinstance(value, str) and value.strip()):
+        elif key == "log_allows" and not _is_bool(value):
+            found.append(f"audit.log_allows: expected true or false, got {value!r}")
+        elif key in ("path", "jsonl_path") and not (isinstance(value, str) and value.strip()):
             found.append(f"audit.{key}: expected a file path, got {value!r}")
 
     for key, validate in validators.items():

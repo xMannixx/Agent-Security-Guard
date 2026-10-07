@@ -172,10 +172,16 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         r"[^\s:/@]{3,}@",
         r"-----BEGIN (RSA |EC |OPENSSH |DSA |ENCRYPTED |PGP )?PRIVATE KEY( BLOCK)?-----",
     ],
+    # A path that is not absolute is taken relative to the guard's state
+    # directory (~/.local/state/agent-security-guard), never to the working
+    # directory, which is the agent's workspace.
     "audit": {
         "backend": "sqlite",
         "path": "guard-audit.db",
         "jsonl_path": "guard-audit.jsonl",
+        # Record every decision, the plain allows too. Without them a trail
+        # shows what was stopped and not what happened around it.
+        "log_allows": True,
     },
     # What to do when the guard itself cannot evaluate an action (import
     # failure, broken config, unwritable audit sink).
@@ -764,11 +770,20 @@ def _written_paths(action: AgentAction) -> List[str]:
 
 
 def _changes_the_agent(action: AgentAction, context: GuardContext) -> bool:
-    patterns = (
+    patterns = list(
         context.config.self_modification_paths
         if context.config is not None
         else DEFAULT_CONFIG["self_modification_paths"]
     )
+    # The audit trail is the guard's own file as much as its policy is. A file
+    # tool pointed at it is held to the same bar, under whatever name the
+    # operator gave it.
+    audit = context.config.audit if context.config is not None else DEFAULT_CONFIG["audit"]
+    patterns += [
+        os.path.basename(str(audit[key]))
+        for key in ("path", "jsonl_path")
+        if audit.get(key)
+    ]
     return any(
         path_matches(path, patterns, ignore_case=True)
         for path in _written_paths(action)

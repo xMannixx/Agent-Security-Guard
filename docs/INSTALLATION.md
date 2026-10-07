@@ -208,6 +208,14 @@ fixed, never the guard. To check a file before using it:
 python -m agent_security_guard --config guard.yaml scan x
 ```
 
+The audit trail is written to `~/.local/state/agent-security-guard/` (or
+`$XDG_STATE_HOME/agent-security-guard/`), readable by you alone. A relative
+`audit.path` in `guard.yaml` is taken relative to that directory; give an
+absolute path to keep it elsewhere. Up to 0.3.0 it was `guard-audit.db` in
+whatever directory the host was started from: such files are left where they
+are and no longer written to. `python -m agent_security_guard audit --verify`
+checks that the trail was not changed.
+
 It does not load a `guard.yaml` from the working directory. That is the agent's
 workspace: a cloned repository, or the agent itself, could put a file there
 that sets `mode: monitor`. If you kept your policy there, move it; the plugin

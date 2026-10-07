@@ -75,6 +75,36 @@ What this does not do: tell the operator in the conversation. In a host that
 shows neither the log nor `config_error`, a refused file is noticed only by
 its settings not being in force.
 
+## The trail
+
+The audit trail is what is left to look at after something went wrong, so it
+is worth as much as it is hard to lose and hard to change.
+
+- It was `guard-audit.db` in the working directory, which is the agent's
+  workspace. A repository could ship a file of that name that is no database,
+  and the audit sink failed to open; or, with the JSONL backend, a link of
+  that name, and the guard appended a line per decision to wherever it
+  pointed. The trail now lives in the guard's state directory, and a link in
+  its place is refused.
+- It was created with the process umask, usually `0644`. It is `0600` now, in
+  a `0700` directory.
+- A record could be edited or removed without a trace. Each record now
+  carries the hash of the one before it, and `audit --verify` fails on a
+  record that was edited, removed from the middle or the start, or added
+  afterwards.
+- A plain allow left no record, so a trail showed the denial at the end of a
+  chain and not the reads and requests that led to it. Every decision is
+  recorded now.
+- A file tool pointed at the trail was an ordinary file write. It is held to
+  the bar of a change to the guard itself.
+
+What remains: the agent runs as the operator's user. Through a shell it can
+read the file, delete it, cut off its newest records (the chain does not show
+that) or rebuild the whole chain. The hash of the newest record, kept
+somewhere the agent cannot write, is what catches the last two; the guard
+does not do that for you. And a record says which tier an action had and the
+hash of the action, not the action itself.
+
 ## What the guard takes for a secret
 
 Class 3 and the denial of a secret in a request both start from recognizing

@@ -261,10 +261,24 @@ secret_patterns:
   - "-----BEGIN (RSA |EC |OPENSSH |DSA |ENCRYPTED |PGP )?PRIVATE KEY( BLOCK)?-----"
 
 # backend: sqlite, jsonl, both, or none (no audit, on purpose).
+#
+# Where: a path that is not absolute is taken relative to the guard's state
+# directory, ~/.local/state/agent-security-guard (or $XDG_STATE_HOME/...),
+# never to the working directory: that is the agent's workspace, and a file of
+# this name planted there would take the trail's place. The file is created
+# for its owner alone (0600), and a file tool that targets it is held to the
+# bar of a change to the guard itself.
+#
+# Every record carries the hash of the one before it. To see whether the
+# trail was changed:  python -m agent_security_guard audit --verify
+#
+# log_allows: record every decision, the plain allows too (default). With
+# false only warnings, confirmations and denials are recorded.
 audit:
   backend: sqlite
   path: "guard-audit.db"
   jsonl_path: "guard-audit.jsonl"
+  log_allows: true
 
 limits:
   max_content_chars: 20000
