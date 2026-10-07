@@ -502,3 +502,64 @@ def test_allowed_calls_carry_no_directive_for_the_host(tool, hermes_reads):
     payload = guard_plugin.guard_tool_call(tool_name=tool, args={"path": "notes.md"})
     assert "action" not in payload
     assert hermes_reads(payload) is None
+
+
+# --------------------------------------------------------------------------- #
+# 10. Guarding requests must not end "reading stays free"
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize("action", [
+    AgentAction(kind="http_get", target="https://docs.python.org/3/library/re.html"),
+    AgentAction(kind="web_fetch", target="https://example.com/blog/post-1#section"),
+    AgentAction(kind="web_search", target="how to set DATABASE_URL in prisma"),
+    AgentAction(kind="summarize", target=""),
+])
+def test_plain_reads_stay_free_after_a_secret_read(action):
+    # Reading .env and then looking something up is ordinary work.
+    adapter = GuardAdapter()
+    context = GuardContext(origin_trust=OriginTrust.LOCAL_PROJECT)
+    adapter.guard_action(AgentAction(kind="read_file", target="/proj/.env"), context)
+    decision = adapter.guard_action(action, context)
+    assert decision.decision is Decision.ALLOW, decision
+
+
+def test_requests_with_a_query_are_free_without_a_secret_read():
+    decision = GuardAdapter().guard_action(
+        AgentAction(kind="http_get", target="https://api.github.com/search?q=guard&per_page=5"),
+        GuardContext(origin_trust=OriginTrust.LOCAL_PROJECT),
+    )
+    assert decision.decision is Decision.ALLOW
+
+
+def test_data_carrying_request_after_secret_read_asks_rather_than_denies():
+    adapter = GuardAdapter()
+    context = GuardContext(origin_trust=OriginTrust.LOCAL_PROJECT)
+    adapter.guard_action(AgentAction(kind="read_file", target="/proj/.env"), context)
+    decision = adapter.guard_action(
+        AgentAction(kind="http_get", target="https://api.github.com/search?q=guard"), context
+    )
+    assert decision.decision is Decision.REQUIRE_CONFIRMATION
+
+
+def test_operator_can_free_requests_after_a_secret_read():
+    config = load_config(None)
+    config.tiers["read_with_data_after_secret"] = "allow"
+    adapter = GuardAdapter(config=config)
+    context = GuardContext(origin_trust=OriginTrust.LOCAL_PROJECT)
+    adapter.guard_action(AgentAction(kind="read_file", target="/proj/.env"), context)
+    decision = adapter.guard_action(
+        AgentAction(kind="http_get", target="https://api.github.com/search?q=guard"), context
+    )
+    assert decision.decision is Decision.ALLOW
+
+
+def test_summarizing_secret_content_locally_is_not_exfiltration():
+    decision = check_action(
+        AgentAction(kind="summarize", target=""),
+        GuardContext(
+            origin_trust=OriginTrust.LOCAL_PROJECT,
+            data_sensitivity=DataSensitivity.SECRET,
+        ),
+    )
+    assert decision.decision is Decision.ALLOW

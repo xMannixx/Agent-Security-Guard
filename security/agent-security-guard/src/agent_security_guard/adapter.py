@@ -16,9 +16,10 @@ from __future__ import annotations
 import dataclasses
 import logging
 from typing import Any, Dict, Optional, Tuple
+from urllib.parse import unquote
 
 from .action_guard import check_action
-from .actions import classify_action, normalize_action
+from .actions import classify_action, normalize_action, sends_to_remote
 from .audit import AuditLog, build_event
 from .memory_bridge import advise_memory_write
 from .modes import MODE_SOURCE_ENV, apply_mode, mode_with_source
@@ -159,6 +160,9 @@ class GuardAdapter:
         if target and path_is_sensitive(target, self.config.sensitive_paths):
             derived = derived.max(DataSensitivity.SENSITIVE)
         blob = action.payload or ""
+        if sends_to_remote(action):
+            # A secret can leave in the address as well as in the body.
+            blob = f"{unquote(target)}\n{blob}"
         if blob:
             payload_class = classify_content(blob, None, self.config)
             derived = derived.max(payload_class.data_sensitivity)

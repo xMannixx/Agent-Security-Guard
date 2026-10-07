@@ -86,6 +86,11 @@ tiers:
   memory_external_to_procedural: deny
   download_then_execute_untrusted: deny
   download_then_execute_user: require_confirmation
+  # After a secret was read in the chain: a GET-like request to a URL that has
+  # room for data (query string, credentials in the URL, a body). Asked about
+  # rather than denied, because such requests are ordinary; a plain GET stays
+  # free. Tunable: deny, require_confirmation, allow_with_warning, allow.
+  read_with_data_after_secret: require_confirmation
 
 # Tiers for your host's own tools: `tool name: tier`. The guard knows the common
 # names (terminal, bash, execute_code, write_file, patch, skill_manage, ...);
