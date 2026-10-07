@@ -68,6 +68,14 @@ including `test_availability.py`, passes unchanged.
   (`SECRET_EXTERNAL_SEND`), and after a secret read a request that has room for
   data (query string, credentials in the URL, a body) needs confirmation
   (`tiers.read_with_data_after_secret`). A plain GET stays free.
+- **Content can no longer break out of the data block.** Markers were escaped
+  by a single text replacement, so `<<<<<END_UNTRUSTED_DATA>>>>>` left a real
+  end marker behind, and lower-case or spaced variants passed untouched. The
+  block markers now carry an id taken from the content's hash, which the
+  content cannot contain, and look-alike markers are escaped whatever their
+  case, bracket count or spacing. The page URL and source name were printed
+  raw above the block, where a newline started a line of its own; they are
+  quoted and escaped now. The degraded wrapper got the same treatment.
 - **Secret reads the exfiltration chain did not see.** A web fetch pointed at a
   `file:` URL reads the local disk but counted as a web read, and the plugin
   looked only at `path` and `payload`, so `.env` read as `filename=` or a
