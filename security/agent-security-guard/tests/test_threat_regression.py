@@ -1129,14 +1129,15 @@ def test_reading_a_credential_file_starts_the_exfiltration_chain(path):
 
 
 @pytest.mark.parametrize("content", [
-    "eyJ" * 350_000,                                   # one run of JWT openers
-    ("eyJ" + "a" * 12 + ".") * 60_000,                 # first parts, never a second
-    "redis://" * 130_000,
-    "redis://" + "a" * 500_000 + ":" + "b" * 500_000,  # user and password, no host
-    "password" + " " * 1_000_000,
-    "api_key\"'" * 100_000,
-    "sk-ant-" * 150_000,
-    "secret_access_key=" * 60_000,
+    # Named, because pytest would otherwise print each megabyte as the test id.
+    pytest.param("eyJ" * 350_000, id="jwt-openers-in-one-run"),
+    pytest.param(("eyJ" + "a" * 12 + ".") * 60_000, id="jwt-first-parts-never-a-second"),
+    pytest.param("redis://" * 130_000, id="connection-url-schemes"),
+    pytest.param("redis://" + "a" * 500_000 + ":" + "b" * 500_000, id="connection-url-without-host"),
+    pytest.param("password" + " " * 1_000_000, id="password-then-spaces"),
+    pytest.param("api_key\"'" * 100_000, id="quoted-names"),
+    pytest.param("sk-ant-" * 150_000, id="key-prefixes"),
+    pytest.param("secret_access_key=" * 60_000, id="names-without-values"),
 ])
 def test_secret_patterns_stay_fast_on_content_built_to_stall_them(content):
     # The secret patterns run over every page the agent fetches. The JWT and
