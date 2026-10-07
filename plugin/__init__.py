@@ -11,9 +11,14 @@ Two hooks, registered defensively (a hook must never crash the host):
 
 Host contract (kwargs are best-effort; unknown shapes are ignored):
 - untrusted items: ``untrusted_items=[{content, source, channel, metadata}]``
-- planned action: ``action={kind,target,method,...}`` (or ``tool_name``+``args``)
-  plus optional provenance ``origin_trust``, ``data_sensitivity``,
-  ``user_intent_origin``, ``chain_id``.
+- planned action: ``action={kind,target,method,...}``, or the tool call as the
+  host has it: ``tool_name``+``args`` (Hermes), ``name``+``input``,
+  ``function``+``arguments``, or the whole call as one mapping or object under
+  ``tool_call`` / ``tool_use`` / ``function_call``. Plus optional provenance
+  ``origin_trust``, ``data_sensitivity``, ``user_intent_origin``, ``chain_id``.
+  A call that names no tool in any of these shapes is not evaluated, and that
+  is logged; it is blocked under ``on_error: deny_all`` and asked about in
+  ``strict`` mode (``_unreadable_call``).
 - memory write: the lane and the source, as ``desired_memory_lane`` /
   ``memory_source`` in ``action``, or in ``args`` under the names memory tools
   use (``lane``, ``memory_lane``, ``source``).
@@ -46,7 +51,7 @@ import sys
 import threading
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("agent_security_guard_plugin")
 
@@ -297,10 +302,10 @@ def wrap_tool_result(**kwargs) -> Optional[str]:
     degraded wrapper.
     """
     result = kwargs.get("result")
-    tool_name = kwargs.get("tool_name") or kwargs.get("tool")
-    if not isinstance(result, str) or not result or not tool_name:
+    call = _tool_call(kwargs)
+    if not isinstance(result, str) or not result or call is None:
         return None
-    tool_name = str(tool_name)
+    tool_name, tool_args = call
     try:
         adapter = _get_adapter()
         if adapter is None:
@@ -313,7 +318,7 @@ def wrap_tool_result(**kwargs) -> Optional[str]:
         ):
             return None
         metadata: Dict[str, Any] = {"source_kind": "web_fetch"}
-        where = _first(_tool_args(kwargs), ("url", "urls", "query", "q"))
+        where = _first(tool_args, ("url", "urls", "query", "q"))
         if isinstance(where, (list, tuple)):
             where = ", ".join(str(item) for item in where)
         if where:
@@ -360,7 +365,7 @@ def wrap_untrusted_context(**kwargs) -> Optional[Dict[str, Any]]:
     return {"context": "\n\n".join(blocks)}
 
 
-def guard_tool_call(**kwargs) -> Optional[Dict[str, Any]]:
+def guard_tool_call(*positional, **kwargs) -> Optional[Dict[str, Any]]:
     """Evaluate a planned tool call; return a decision dict for the host.
 
     When the guard cannot evaluate the action (import/init failure or a runtime
@@ -371,9 +376,10 @@ def guard_tool_call(**kwargs) -> Optional[Dict[str, Any]]:
     outage; one that waves a write through because evaluating it raised is not
     one either. Set ``on_error: deny_all`` in guard.yaml to block everything.
     """
+    kwargs = _with_positional(positional, kwargs)
     action = _extract_action(kwargs)
     if action is None:
-        return None
+        return _unreadable_call(kwargs)
     fingerprint = _call_fingerprint(kwargs)
     adapter = _get_adapter()
     if adapter is None:
@@ -407,6 +413,58 @@ def guard_tool_call(**kwargs) -> Optional[Dict[str, Any]]:
     return _with_host_directive(
         payload, fingerprint, trusted_origin, str(getattr(action, "kind", "") or "")
     )
+
+
+_UNREADABLE = "GUARD_UNREADABLE_CALL"
+_unreadable_calls = 0
+_unreadable_shapes: set = set()
+_MAX_REPORTED_SHAPES = 32
+
+
+def _unreadable_call(kwargs: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """The hook was called and nothing in the call says which tool is meant.
+
+    This used to return ``None`` without a word. To a host that hands its
+    calls over in a shape the guard does not know, every call was "no
+    objection", and nothing said that the guard was not looking at any of
+    them. It is still not an outage by default: the guard cannot tell a read
+    from a write here, and blocking what it cannot read is how 0.2.x took
+    hosts down. But it is said, once per shape, and counted; the operator who
+    asked for everything to be blocked when the guard cannot evaluate
+    (``on_error: deny_all``) gets that, and ``strict`` mode asks.
+    """
+    global _unreadable_calls
+    _unreadable_calls += 1
+    shape = tuple(sorted(str(key) for key in kwargs))
+    if shape not in _unreadable_shapes and len(_unreadable_shapes) < _MAX_REPORTED_SHAPES:
+        _unreadable_shapes.add(shape)
+        logger.error(
+            "pre_tool_call names no tool in a shape the guard reads (arguments "
+            "given: %s). Calls of this shape are NOT evaluated. Pass tool_name "
+            "and args, or set on_error: deny_all to block them.",
+            ", ".join(shape) or "none",
+        )
+    adapter = _get_adapter()
+    config = adapter.config if adapter is not None else _config
+    mode = getattr(adapter, "mode", None)
+    if mode == "monitor":
+        return None
+    message = (
+        "agent-security-guard could not read this tool call (it names no tool "
+        "in a shape the guard knows), so it was not evaluated."
+    )
+    if str(getattr(config, "on_error", "degrade") or "degrade").lower() == "deny_all":
+        payload = _fail_closed_payload(message)
+        payload["reason_code"] = _UNREADABLE
+        return _with_host_directive(payload, "")
+    if mode == "strict":
+        payload = _fail_closed_payload(message)
+        payload.update(
+            decision="require_confirmation", reason_code=_UNREADABLE,
+            requires_confirmation=True, risk_score=0.6,
+        )
+        return _with_host_directive(payload, "")
+    return None
 
 
 # Denials that mean "the user has not ordered this", not "this is forbidden".
@@ -460,14 +518,12 @@ def _with_host_directive(
 def _call_fingerprint(kwargs: Dict[str, Any]) -> str:
     """Short hash over the tool name and every argument of the call."""
     spec = kwargs.get("action")
-    subject: Any = (
-        spec if isinstance(spec, dict)
-        else [kwargs.get("tool_name") or kwargs.get("tool"), _tool_args(kwargs)]
-    )
+    call = _tool_call(kwargs)
+    subject: Any = spec if isinstance(spec, dict) else list(call or ())
     try:
         raw = json.dumps(subject, sort_keys=True, default=str)
     except Exception:  # unserializable or too deeply nested
-        raw = str(kwargs.get("tool_name") or kwargs.get("tool") or "")
+        raw = call[0] if call else ""
     return hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:12]
 
 
@@ -675,11 +731,11 @@ def _extract_action(kwargs: Dict[str, Any]):
             memory_source=spec.get("memory_source"),
             metadata=spec.get("metadata", {}) or {},
         )
-    tool_name = kwargs.get("tool_name") or kwargs.get("tool")
-    if tool_name:
-        args = _tool_args(kwargs)
+    call = _tool_call(kwargs)
+    if call is not None:
+        tool_name, args = call
         return AgentAction(
-            kind=str(tool_name),
+            kind=tool_name,
             target=str(_first(args, _TARGET_KEYS) or ""),
             method=args.get("method"),
             payload=_first(args, _PAYLOAD_KEYS),
@@ -746,19 +802,79 @@ def _first(args: Dict[str, Any], keys) -> Any:
     return None
 
 
-def _tool_args(kwargs: Dict[str, Any]) -> Dict[str, Any]:
+# The names hosts give the two halves of a tool call. Hermes passes
+# `tool_name` and `args`. Others pass `name` and `input` (a model's tool-use
+# block), a function's `arguments`, or the whole call as one mapping or object.
+# Only the first pair was read, and a call in any other shape was not looked at.
+_TOOL_NAME_KEYS = ("tool_name", "tool", "name", "function_name", "function")
+_TOOL_ARGS_KEYS = (
+    "args", "arguments", "input", "tool_input", "parameters", "params", "tool_args",
+)
+_TOOL_CALL_KEYS = ("tool_call", "tool_use", "function_call", "call", "function", "tool")
+_SCALARS = (str, bytes, int, float, bool, list, tuple, set)
+
+
+def _field(holder: Any, key: str) -> Any:
+    """``holder[key]`` of a mapping, ``holder.key`` of an object."""
+    if isinstance(holder, dict):
+        return holder.get(key)
+    if holder is None or isinstance(holder, _SCALARS):
+        return None
+    return getattr(holder, key, None)
+
+
+def _tool_call(kwargs: Dict[str, Any]) -> Optional[Tuple[str, Dict[str, Any]]]:
+    """The tool's name and its arguments, in whichever shape the host has
+    them, or None when the call names no tool."""
+    holders: List[Any] = [kwargs]
+    for key in _TOOL_CALL_KEYS:
+        value = kwargs.get(key)
+        if value is not None and not isinstance(value, _SCALARS):
+            holders.append(value)
+            # a function call keeps name and arguments one level further in
+            inner = _field(value, "function")
+            if inner is not None and not isinstance(inner, _SCALARS):
+                holders.append(inner)
+    for holder in holders:
+        for key in _TOOL_NAME_KEYS:
+            name = _field(holder, key)
+            if isinstance(name, str) and name.strip():
+                return name, _arguments(holder) or _arguments(kwargs)
+    return None
+
+
+def _arguments(holder: Any) -> Dict[str, Any]:
     """Tool arguments as a mapping.
 
     A host that relays the model's tool call verbatim passes them as a JSON
     string; anything else that is not a mapping carries nothing usable.
     """
-    args = kwargs.get("args") or kwargs.get("arguments") or {}
-    if isinstance(args, str):
-        try:
-            args = json.loads(args)
-        except Exception:  # malformed, or nested deeply enough to hit the recursion limit
-            args = {}
-    return args if isinstance(args, dict) else {}
+    for key in _TOOL_ARGS_KEYS:
+        args = _field(holder, key)
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except Exception:  # malformed, or nested too deeply to parse
+                args = None
+        if isinstance(args, dict) and args:
+            return args
+    return {}
+
+
+def _with_positional(positional: tuple, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    """Read a call made with positional arguments: a name, its arguments, or
+    the whole call as one object. Named arguments are left as they are."""
+    if not positional:
+        return kwargs
+    merged = dict(kwargs)
+    for value in positional:
+        if isinstance(value, str):
+            merged.setdefault("tool_name", value)
+        elif isinstance(value, dict) and not any(key in value for key in _TOOL_NAME_KEYS):
+            merged.setdefault("args", value)
+        elif value is not None and not isinstance(value, _SCALARS):
+            merged.setdefault("tool_call", value)
+    return merged
 
 
 def _extract_context(kwargs: Dict[str, Any], adapter) -> GuardContext:
@@ -866,6 +982,8 @@ def guard_status() -> Dict[str, Any]:
     return {
         "available": GuardAdapter is not None,
         "error": _IMPORT_ERROR,
+        # Calls to the tool hook that named no tool the guard could read.
+        "unreadable_calls": _unreadable_calls,
         # Where the code in use came from.
         "loaded_from": os.path.dirname(
             getattr(sys.modules.get(_PACKAGE), "__file__", None) or ""

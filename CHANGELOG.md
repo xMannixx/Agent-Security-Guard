@@ -241,6 +241,21 @@ including `test_availability.py`, passes unchanged.
   - A recognized file tool that writes into the package (in any of the
     locations, also an empty one) or into the plugin's directory is treated as
     a change to the guard itself, like a write to `guard.yaml`.
+- **A tool call in another host's shape is evaluated, and one the guard cannot
+  read is no longer silent.** The tool hook read `tool_name` + `args` and
+  `action=`, and returned `None` for anything else, which a host takes for "no
+  objection": a host passing `name` and `input` ran with a guard that looked
+  at none of its calls.
+  - The hook reads `name`/`input`, `function`/`arguments`,
+    `function_name`/`parameters`, `tool_input`, the whole call as one mapping
+    or object under `tool_call` / `tool_use` / `function_call` (also with the
+    name one level further in, under `function`), and positional arguments.
+    The result hook reads the tool name the same way.
+  - A call that names no tool in any of these shapes is logged at error level,
+    once per shape, and counted in `guard_status()["unreadable_calls"]`. It is
+    blocked under `on_error: deny_all` and goes to the approval prompt in
+    `strict` mode (`GUARD_UNREADABLE_CALL`). By default it still runs: the
+    guard cannot tell a read from a write there.
 - **The memory bridge no longer trusts a source it has no entry for.** Only
   `tool`, `external` and `inference` counted as untrusted, so a preference
   "from `web`" was allowed. Anything but `observation` and `conversation` is
