@@ -36,8 +36,9 @@ flowchart TD
   explicit `source_kind` first. A web-fetch tool produces `external_web`;
   generic/unknown tool output stays untrusted (fail safe).
 - **Classify, then decide.** `classify_action` / `classify_content` are
-  separate from the decision logic, so policy is unit-testable and unknown
-  inputs fail safe (`ActionTier.UNKNOWN` -> require confirmation).
+  separate from the decision logic, so policy is unit-testable. A kind nobody
+  classified is `ActionTier.UNKNOWN`: allowed and audited, confirmed in
+  `strict`, denied when untrusted content proposed it.
 - **Machine-readable decisions.** `GuardDecision` carries a `ReasonCode` enum,
   not a free string — so hosts, tests, and audit can branch deterministically.
 - **Sequence as a first-class guard.** Single actions can each look harmless;
@@ -60,7 +61,8 @@ flowchart TD
 | `types.py` | Enums + dataclasses (the shared vocabulary) |
 | `_miniyaml.py` | Conservative stdlib YAML-subset loader |
 | `policy.py` | Defaults, config load, predicates, `decide_action` matrix |
-| `actions.py` | `classify_action` (kind/method -> tier) |
+| `actions.py` | `classify_action` (declared tier / kind / host tool name / method -> tier) |
+| `host_tools.py` | Names real hosts give their tools, mapped to tiers |
 | `action_guard.py` | `check_action` (classify -> decide -> risk score) |
 | `patterns.py` | Injection / executable detector banks |
 | `envelope.py` | `resolve_origin_trust` (source_kind inheritance) |

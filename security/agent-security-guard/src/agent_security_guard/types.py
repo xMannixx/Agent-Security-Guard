@@ -100,9 +100,19 @@ class ReasonCode(str, Enum):
     SELF_MODIFICATION_REQUIRES_EXPLICIT_TARGET = "SELF_MODIFICATION_REQUIRES_EXPLICIT_TARGET"
     SELF_MODIFICATION_REQUIRES_CONFIRMATION = "SELF_MODIFICATION_REQUIRES_CONFIRMATION"
 
+    # local file writes by host file tools (write_file, patch, ...)
+    LOCAL_WRITE_AUDITED = "LOCAL_WRITE_AUDITED"
+    LOCAL_WRITE_REQUIRES_CONFIRMATION = "LOCAL_WRITE_REQUIRES_CONFIRMATION"
+    UNTRUSTED_TO_LOCAL_WRITE = "UNTRUSTED_TO_LOCAL_WRITE"
+
+    # a host tool recognized by name, on a trusted origin with nothing pointing
+    # at danger
+    HOST_TOOL_AUDITED = "HOST_TOOL_AUDITED"
+
     # fallbacks
     UNKNOWN_ACTION_REQUIRES_CONFIRMATION = "UNKNOWN_ACTION_REQUIRES_CONFIRMATION"
     UNKNOWN_ACTION_AUDITED = "UNKNOWN_ACTION_AUDITED"
+    UNTRUSTED_TO_UNKNOWN_ACTION = "UNTRUSTED_TO_UNKNOWN_ACTION"
     GUARD_UNAVAILABLE = "GUARD_UNAVAILABLE"
 
     # availability: the guard must never brick the host silently
@@ -116,6 +126,7 @@ class ActionTier(str, Enum):
 
     READ_ONLY = "read_only"
     LOCAL_READ = "local_read"
+    LOCAL_WRITE = "local_write"
     MEMORY_WRITE = "memory_write"
     EXTERNAL_WRITE = "external_write"
     EXECUTION = "execution"
@@ -246,6 +257,10 @@ class GuardConfig:
     limits: Dict[str, Any] = field(default_factory=dict)
     on_error: str = "degrade"
     scope_from_text: bool = False
+    # Operator-declared tiers for host tools: {tool name: ActionTier value}.
+    tool_tiers: Dict[str, str] = field(default_factory=dict)
+    # Paths whose modification changes the agent's own future behavior.
+    self_modification_paths: List[str] = field(default_factory=list)
 
 
 @dataclass

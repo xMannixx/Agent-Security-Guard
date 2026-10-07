@@ -34,6 +34,19 @@ including `test_availability.py`, passes unchanged.
 - **`AGENT_SECURITY_GUARD_MODE` is read once, at startup.** It was read on
   every evaluation, so any code in the process could switch a running guard to
   `monitor`. Set it and restart the host.
+- **The hard rules now hold under the names hosts give their tools.** The kind
+  table knew `shell` but not `bash`, `terminal`, or `execute_code`, and had no
+  notion of a file write at all, so those were "unknown actions" and allowed:
+  untrusted content could run a shell, a no-write scope did not stop
+  `write_file`, and `write_file` on `SKILL.md` walked past the
+  self-modification bar. The common host names are recognized (also behind a
+  namespace prefix such as `mcp__files__write_file`), file tools have their own
+  tier (`local_write`), and a file tool writing `SKILL.md` or `guard.yaml` is
+  self-modification.
+- **An unrecognized tool is denied when untrusted content proposed it**
+  (`UNTRUSTED_TO_UNKNOWN_ACTION`, when the host reports
+  `user_intent_origin=untrusted_suggestion`). Tunable with
+  `tiers.unknown_action_from_untrusted`.
 
 ### Changed
 
@@ -47,14 +60,25 @@ including `test_availability.py`, passes unchanged.
   adapter cannot be built.
 - A broken install (package not importable) now reaches the degraded decision
   instead of raising `NameError` from the hook.
+- **Recognizing a host tool does not gate it more.** On a trusted or
+  unspecified origin with nothing pointing at danger, `terminal`, `write_file`
+  and the like are allowed and audited as they were while unrecognized
+  (`HOST_TOOL_AUDITED`, `LOCAL_WRITE_AUDITED`). What is new for a host that
+  passes no provenance: `skill_manage` and file writes to `SKILL.md` or
+  `guard.yaml` are denied without an explicit user order, like `skill_patch`
+  always was, and recognized tools are blocked while the engine cannot evaluate.
 
 ### Added
 
 - `guard_status()` reports `config_error`, `mode`, and `mode_source`.
+- `tool_tiers` in guard.yaml: declare the tier of your host's own tools. Wins
+  over the built-in tables; a misspelled tier fails loudly.
+- `self_modification_paths`, and the tier settings `local_write`,
+  `recognized_host_tool`, `unknown_action_from_untrusted`.
 - `normalize_action`, `mode_with_source`, `GuardAdapter.mode_source`,
   `GuardContext.mode_resolved`.
-- 21 tests: threat class 8 ("neutralizing the guard") in
-  `test_threat_regression.py`, and the matching availability checks.
+- Tests: threat class 8 ("neutralizing the guard") and the host-tool-name
+  cases in `test_threat_regression.py`, with the matching availability checks.
 
 ## [0.3.0] - 2026-08-30
 

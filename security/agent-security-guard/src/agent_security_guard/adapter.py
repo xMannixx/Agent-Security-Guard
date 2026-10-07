@@ -108,7 +108,7 @@ class GuardAdapter:
         action = normalize_action(action)
         context = self._apply_session_policy(context)
         context = self._enrich_sensitivity(action, context)
-        tier = classify_action(action)
+        tier = classify_action(action, context.config)
         action_decision = check_action(action, context)
         sequence_decision = check_sequence(action, self.history, context)
         final = apply_mode(_stricter(action_decision, sequence_decision), self.mode)

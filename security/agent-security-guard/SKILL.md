@@ -61,6 +61,17 @@ dangerous kinds are blocked; `on_error: deny_all` blocks everything. The plugin
 reads `guard.yaml` from `/etc/agent-security-guard/`, `~/.hermes/`, or its own
 install directory, never from the working directory.
 
+## Host tool names
+
+The hard rules apply to a host's tools under the names the host gives them:
+`terminal`, `bash`, `execute_code`, `write_file`, `patch`, `send_email`,
+`skill_manage`, and the like are recognized (also behind a namespace prefix),
+and a file tool writing `SKILL.md` or `guard.yaml` counts as self-modification.
+Recognized host tools are not gated more than before on a trusted origin; they
+are denied from untrusted content. Declare anything else in `tool_tiers`
+(`guard.yaml`). An unrecognized tool is allowed and audited, and denied when
+the host reports that untrusted content proposed it.
+
 ## Status
 
 v0.3.0 fixes a critical over-blocking regression: 0.2.x denied nearly every

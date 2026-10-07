@@ -14,9 +14,11 @@ from __future__ import annotations
 
 import fnmatch
 import os
+import re
 from typing import Any, Dict, List, Optional
 
 from . import _miniyaml
+from .actions import recognized_by_name_only
 from .modes import MODE_STRICT, effective_mode, normalize_mode
 from .types import (
     ActionTier,
@@ -59,7 +61,27 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         # here is what took hosts down in 0.2.x: an unknown *tool name* is not
         # evidence of danger. Only `strict` mode stops and asks.
         "unknown_action": "allow_with_warning",
+        # ...unless the host itself says untrusted content proposed it. That is
+        # evidence: untrusted content has no authority over an action the guard
+        # cannot tell from a write. Declare the tool in `tool_tiers` to lift it.
+        "unknown_action_from_untrusted": "deny",
+        # A file write by a host file tool (write_file, patch, ...) on a trusted
+        # origin. Not tunable: from untrusted content it is denied.
+        "local_write": "allow_with_warning",
+        "local_write_from_untrusted": "deny",
+        # A host tool the guard recognized by its name (terminal, bash, ...),
+        # on a trusted origin with nothing pointing at danger. The host never
+        # opted into a confirmation flow for it, so asking would block it the
+        # way 0.2.x blocked every host tool. Set to require_confirmation if the
+        # host can surface a prompt.
+        "recognized_host_tool": "allow_with_warning",
     },
+    # Tiers for the host's own tools, for names the guard does not know or
+    # reads wrongly: {tool name: tier}. Wins over the built-in tables.
+    "tool_tiers": {},
+    # Writing these with a file tool changes the agent's own future behavior,
+    # so it is held to the self-modification bar, not treated as a plain write.
+    "self_modification_paths": ["SKILL.md", "guard.yaml"],
     # Only true secret material. Broad developer-file globs (*.db, *.log,
     # settings.json, config.py, ...) used to land here, which marked ordinary
     # project files as sensitive and then blocked every later external write
@@ -123,7 +145,7 @@ def load_config(path: Optional[str] = None) -> GuardConfig:
         if not isinstance(loaded, dict):
             raise ValueError("guard.yaml must be a mapping at the top level")
         for key, value in loaded.items():
-            if key in ("tiers", "audit", "limits") and isinstance(value, dict):
+            if key in ("tiers", "audit", "limits", "tool_tiers") and isinstance(value, dict):
                 merged[key] = {**merged.get(key, {}), **value}
             else:
                 merged[key] = value
@@ -137,7 +159,31 @@ def load_config(path: Optional[str] = None) -> GuardConfig:
         limits=dict(merged.get("limits", {})),
         on_error=str(merged.get("on_error", "degrade")),
         scope_from_text=bool(merged.get("scope_from_text", False)),
+        tool_tiers=_validated_tool_tiers(merged.get("tool_tiers")),
+        self_modification_paths=list(merged.get("self_modification_paths") or []),
     )
+
+
+def _validated_tool_tiers(raw: Any) -> Dict[str, str]:
+    """``tool_tiers`` as {lower-case tool name: tier value}; raises on a typo.
+
+    A misspelled tier must not quietly leave the tool unclassified.
+    """
+    if not raw:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError("tool_tiers must be a mapping of tool name to tier")
+    known = {tier.value for tier in ActionTier}
+    result: Dict[str, str] = {}
+    for name, tier in raw.items():
+        value = str(tier).strip().lower()
+        if value not in known:
+            raise ValueError(
+                f"tool_tiers.{name}: unknown tier {tier!r} "
+                f"(expected one of {', '.join(sorted(known))})"
+            )
+        result[str(name).strip().lower()] = value
+    return result
 
 
 def _deep_copy_defaults() -> Dict[str, Any]:
@@ -151,6 +197,8 @@ def _deep_copy_defaults() -> Dict[str, Any]:
         "limits": dict(DEFAULT_CONFIG["limits"]),
         "on_error": DEFAULT_CONFIG["on_error"],
         "scope_from_text": DEFAULT_CONFIG["scope_from_text"],
+        "tool_tiers": dict(DEFAULT_CONFIG["tool_tiers"]),
+        "self_modification_paths": list(DEFAULT_CONFIG["self_modification_paths"]),
     }
 
 
@@ -160,7 +208,12 @@ def _deep_copy_defaults() -> Dict[str, Any]:
 
 
 def path_is_sensitive(path: str, patterns: List[str]) -> bool:
-    """Glob-match a path against sensitive-path patterns.
+    """Glob-match a path against sensitive-path patterns."""
+    return path_matches(path, patterns)
+
+
+def path_matches(path: str, patterns: List[str], ignore_case: bool = False) -> bool:
+    """Glob-match a path against a pattern list.
 
     Patterns ending in ``/`` match a directory anywhere in the path; other
     patterns match the basename or the full normalized path.
@@ -168,6 +221,9 @@ def path_is_sensitive(path: str, patterns: List[str]) -> bool:
     if not path:
         return False
     normalized = path.replace("\\", "/").strip()
+    if ignore_case:
+        normalized = normalized.lower()
+        patterns = [pattern.lower() for pattern in patterns]
     basename = normalized.rsplit("/", 1)[-1]
     segments = [seg for seg in normalized.split("/") if seg]
     for pattern in patterns:
@@ -294,6 +350,7 @@ STATE_CHANGING_TIERS = frozenset(
         ActionTier.EXECUTION,
         ActionTier.INSTALL,
         ActionTier.EXTERNAL_WRITE,
+        ActionTier.LOCAL_WRITE,
         ActionTier.CONFIG_CHANGE,
         ActionTier.MEMORY_WRITE,
         ActionTier.SELF_MODIFICATION,
@@ -333,7 +390,10 @@ def decide_action(
         return _decide_local_read(context)
 
     if tier is ActionTier.EXECUTION:
-        return _decide_execution(context)
+        return _decide_execution(action, context)
+
+    if tier is ActionTier.LOCAL_WRITE:
+        return _decide_local_write(action, context)
 
     if tier is ActionTier.DOWNLOAD:
         return _decide(
@@ -343,7 +403,7 @@ def decide_action(
         )
 
     if tier is ActionTier.INSTALL:
-        return _decide_install(context)
+        return _decide_install(action, context)
 
     if tier is ActionTier.EXTERNAL_WRITE:
         return _decide_external_write(action, context)
@@ -352,7 +412,7 @@ def decide_action(
         return _decide_memory_write(action, context)
 
     if tier is ActionTier.CONFIG_CHANGE:
-        return _decide_config_change(context)
+        return _decide_config_change(action, context)
 
     if tier is ActionTier.SELF_MODIFICATION:
         return _decide_self_modification(action, context)
@@ -376,7 +436,19 @@ def _decide_unknown_action(context: GuardContext) -> GuardDecision:
     danger — the dangerous transitions are recognized by tier, not by name.
 
     So the default is to allow and audit, and only ``strict`` mode stops to ask.
+
+    One case is different: the host says untrusted content proposed the action.
+    That is evidence about the origin, and untrusted content has no authority
+    over an action the guard cannot tell from a write. A read tool that gets
+    caught by this is declared in ``tool_tiers``.
     """
+    if _suggested_by_untrusted(context):
+        return _tuned(
+            tier_setting(context, "unknown_action_from_untrusted", Decision.DENY),
+            ReasonCode.UNTRUSTED_TO_UNKNOWN_ACTION,
+            "Unclassified action proposed by untrusted content; declare the "
+            "tool in tool_tiers if it is harmless.",
+        )
     if resolve_mode(context) == MODE_STRICT:
         return _decide(
             Decision.REQUIRE_CONFIRMATION,
@@ -481,7 +553,7 @@ def _decide_local_read(context: GuardContext) -> GuardDecision:
     )
 
 
-def _decide_execution(context: GuardContext) -> GuardDecision:
+def _decide_execution(action: AgentAction, context: GuardContext) -> GuardDecision:
     if _untrusted(context):
         return _deny(
             ReasonCode.UNTRUSTED_TO_SHELL,
@@ -493,21 +565,111 @@ def _decide_execution(context: GuardContext) -> GuardDecision:
             "Execution originated from untrusted content; a bare confirmation "
             "does not authorize it.",
         )
-    return _tuned(
-        tier_setting(context, "shell_from_user", Decision.REQUIRE_CONFIRMATION),
+    return _trusted_origin_gate(
+        action, context, "shell_from_user",
         ReasonCode.SHELL_FROM_USER_REQUIRES_CONFIRMATION,
         "Shell/execution from a trusted origin requires confirmation.",
     )
 
 
-def _decide_install(context: GuardContext) -> GuardDecision:
+# Paths named by a patch body: the V4A headers used by apply_patch-style tools
+# and the "+++ b/path" line of a unified diff.
+_PATCH_PATH = re.compile(
+    r"^(?:\*\*\* (?:Add|Update|Delete) File: |\*\*\* Move to: |\+\+\+ (?:b/)?)(\S.*?)\s*$",
+    re.MULTILINE,
+)
+
+
+def _written_paths(action: AgentAction) -> List[str]:
+    """The paths a file tool is about to write: its target plus any named in a
+    patch body, where a multi-file patch carries no single target."""
+    paths = [action.target or ""]
+    texts = [action.payload] + list((action.metadata or {}).values())
+    for text in texts:
+        if isinstance(text, str) and ("***" in text or "+++" in text):
+            paths.extend(_PATCH_PATH.findall(text))
+    return [path for path in paths if path]
+
+
+def _changes_the_agent(action: AgentAction, context: GuardContext) -> bool:
+    patterns = (
+        context.config.self_modification_paths
+        if context.config is not None
+        else DEFAULT_CONFIG["self_modification_paths"]
+    )
+    return any(
+        path_matches(path, patterns, ignore_case=True)
+        for path in _written_paths(action)
+    )
+
+
+def _decide_local_write(action: AgentAction, context: GuardContext) -> GuardDecision:
+    """A write to the local filesystem by a host file tool."""
+    if _changes_the_agent(action, context):
+        # A file tool pointed at a skill or at the guard's policy is the same
+        # act as skill_patch, so it meets the same bar.
+        return _decide_self_modification(action, context)
+    if _untrusted(context) or _suggested_by_untrusted(context):
+        return _deny(
+            ReasonCode.UNTRUSTED_TO_LOCAL_WRITE,
+            "File write requested from untrusted content is denied.",
+        )
+    if resolve_mode(context) == MODE_STRICT:
+        # Strict asked for confirmation on these while they were unrecognized;
+        # recognizing them must not make strict weaker.
+        return _decide(
+            Decision.REQUIRE_CONFIRMATION,
+            ReasonCode.LOCAL_WRITE_REQUIRES_CONFIRMATION,
+            "File write; strict mode requires explicit confirmation.",
+        )
+    return _tuned(
+        tier_setting(context, "local_write", Decision.ALLOW_WITH_WARNING),
+        ReasonCode.LOCAL_WRITE_AUDITED,
+        "Local file write from a trusted origin; allowed and audited.",
+    )
+
+
+def _trusted_origin_gate(
+    action: AgentAction,
+    context: GuardContext,
+    key: str,
+    reason: ReasonCode,
+    message: str,
+) -> GuardDecision:
+    """The tunable decision for a gated tier once its hard denials have passed.
+
+    A kind the host named explicitly, or a tool the operator declared, gets the
+    tier's own setting (confirmation by default). A host tool the guard only
+    recognized by its name gets ``recognized_host_tool`` instead (allow and
+    audit by default): the host never opted into a confirmation flow for it,
+    and asking anyway is what blocked hosts' own tools in 0.2.x. That holds
+    only while nothing points at danger: ``strict`` mode, an untrusted origin,
+    or sensitive data put the tier's own setting back in force.
+    """
+    if (
+        recognized_by_name_only(action, context.config)
+        and resolve_mode(context) != MODE_STRICT
+        and not _untrusted(context)
+        and context.data_sensitivity.rank < DataSensitivity.SENSITIVE.rank
+    ):
+        return _tuned(
+            tier_setting(context, "recognized_host_tool", Decision.ALLOW_WITH_WARNING),
+            ReasonCode.HOST_TOOL_AUDITED,
+            "Host tool recognized by name, trusted origin; allowed and audited.",
+        )
+    return _tuned(
+        tier_setting(context, key, Decision.REQUIRE_CONFIRMATION), reason, message
+    )
+
+
+def _decide_install(action: AgentAction, context: GuardContext) -> GuardDecision:
     if _untrusted(context) or _suggested_by_untrusted(context):
         return _deny(
             ReasonCode.INSTALL_FROM_UNTRUSTED,
             "Install/update requested from untrusted content is denied.",
         )
-    return _tuned(
-        tier_setting(context, "install_from_user", Decision.REQUIRE_CONFIRMATION),
+    return _trusted_origin_gate(
+        action, context, "install_from_user",
         ReasonCode.INSTALL_REQUIRES_CONFIRMATION,
         "Install/update from a trusted origin requires confirmation.",
     )
@@ -545,21 +707,21 @@ def _decide_external_write(
             ReasonCode.ALLOW_DEFAULT,
             "Write to a local loopback address; allowed and audited.",
         )
-    return _tuned(
-        tier_setting(context, "external_write", Decision.REQUIRE_CONFIRMATION),
+    return _trusted_origin_gate(
+        action, context, "external_write",
         ReasonCode.EXTERNAL_WRITE_REQUIRES_CONFIRMATION,
         "External write requires confirmation.",
     )
 
 
-def _decide_config_change(context: GuardContext) -> GuardDecision:
+def _decide_config_change(action: AgentAction, context: GuardContext) -> GuardDecision:
     if _untrusted(context) or _suggested_by_untrusted(context):
         return _deny(
             ReasonCode.CONFIRMATION_ORIGIN_UNTRUSTED,
             "Config/profile change requested from untrusted content is denied.",
         )
-    return _tuned(
-        tier_setting(context, "config_change", Decision.REQUIRE_CONFIRMATION),
+    return _trusted_origin_gate(
+        action, context, "config_change",
         ReasonCode.CONFIG_CHANGE_REQUIRES_CONFIRMATION,
         "Config/profile change requires confirmation.",
     )

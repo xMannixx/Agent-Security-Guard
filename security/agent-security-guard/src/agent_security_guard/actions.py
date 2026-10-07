@@ -1,18 +1,20 @@
 """Deterministic action classification: ``classify_action`` -> ``ActionTier``.
 
 Classifying first, then deciding, keeps the policy testable: tests can assert
-the tier independently of the decision. Unknown kinds fall back to
-``ActionTier.UNKNOWN`` (which the policy treats as require-confirmation), so a
-new, unmapped action fails safe rather than slipping through as read-only.
+the tier independently of the decision. A kind nobody classified is
+``ActionTier.UNKNOWN``, never read-only; what the policy does with it depends
+on the mode and on who proposed it.
 """
 
 from __future__ import annotations
 
 import dataclasses
 import json
+import re
 from typing import Any, Optional
 
-from .types import ActionTier, AgentAction
+from .host_tools import HOST_TOOL_TIER
+from .types import ActionTier, AgentAction, GuardConfig
 
 
 _REMOTE_SCHEMES = ("http://", "https://", "ftp://", "ftps://")
@@ -74,15 +76,34 @@ _WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
-def classify_action(action: AgentAction) -> ActionTier:
-    """Map an ``AgentAction`` to a single ``ActionTier`` deterministically."""
-    kind = (action.kind or "").strip().lower()
+_GENERIC_HTTP_KINDS = ("http", "https", "request", "http_request", "fetch")
+_READ_TIERS = frozenset({ActionTier.READ_ONLY, ActionTier.LOCAL_READ})
+
+# ``mcp__files__write_file``, ``files.write_file``, ``files/write_file`` ...
+_NAMESPACE_SEPARATOR = re.compile(r"__|[./:]")
+
+
+def classify_action(
+    action: AgentAction, config: Optional[GuardConfig] = None
+) -> ActionTier:
+    """Map an ``AgentAction`` to a single ``ActionTier`` deterministically.
+
+    Precedence: a tier the operator declared for this tool (``tool_tiers``),
+    the guard's own kind table, then the names real hosts give their tools.
+    """
+    kind = _kind(action)
+
+    declared = _declared_tier(kind, config)
+    if declared is not None:
+        return declared
 
     # Generic HTTP request: let the method decide read vs write.
-    if kind in ("http", "https", "request", "http_request", "fetch"):
+    if kind in _GENERIC_HTTP_KINDS:
         return _classify_http(action)
 
     tier = _KIND_TIER.get(kind)
+    if tier is None:
+        tier = _host_tool_tier(kind)
     if tier is not None:
         # A read of a remote URL is READ_ONLY; a read of a local path is LOCAL_READ.
         if tier is ActionTier.LOCAL_READ and _is_remote(action.target):
@@ -97,6 +118,49 @@ def classify_action(action: AgentAction) -> ActionTier:
         return ActionTier.READ_ONLY
 
     return ActionTier.UNKNOWN
+
+
+def recognized_by_name_only(
+    action: AgentAction, config: Optional[GuardConfig] = None
+) -> bool:
+    """True when the tier is the guard's reading of a host's tool name.
+
+    False for a kind from the guard's own table and for a tool the operator
+    declared: in both cases someone stated what the action is. The policy uses
+    the difference to decide whether a confirmation gate applies.
+    """
+    kind = _kind(action)
+    if _declared_tier(kind, config) is not None:
+        return False
+    if kind in _KIND_TIER or kind in _GENERIC_HTTP_KINDS:
+        return False
+    return _host_tool_tier(kind) is not None
+
+
+def _kind(action: AgentAction) -> str:
+    return (action.kind or "").strip().lower()
+
+
+def _declared_tier(kind: str, config: Optional[GuardConfig]) -> Optional[ActionTier]:
+    declared = config.tool_tiers.get(kind) if config and config.tool_tiers else None
+    return ActionTier(declared) if declared is not None else None
+
+
+def _host_tool_tier(kind: str) -> Optional[ActionTier]:
+    """Tier for a host tool name, also when it carries a namespace prefix.
+
+    A prefixed name is matched by its last segment for state-changing tools
+    only. The prefix is chosen by whoever registered the tool, so it may make a
+    name stricter but never vouch that ``evil__read_file`` is a plain read.
+    """
+    tier = HOST_TOOL_TIER.get(kind)
+    if tier is not None:
+        return tier
+    last = _NAMESPACE_SEPARATOR.split(kind)[-1]
+    if last == kind:
+        return None
+    tier = _KIND_TIER.get(last) or HOST_TOOL_TIER.get(last)
+    return None if tier in _READ_TIERS else tier
 
 
 def normalize_action(action: AgentAction) -> AgentAction:

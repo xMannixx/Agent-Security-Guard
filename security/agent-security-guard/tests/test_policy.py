@@ -302,3 +302,24 @@ def test_malformed_config_raises(tmp_path):
     bad.write_text("tiers:\n\tread_only: allow\n", encoding="utf-8")
     with pytest.raises(ValueError):
         load_config(str(bad))
+
+
+def test_tool_tiers_are_loaded_by_lower_case_name(tmp_path):
+    path = tmp_path / "guard.yaml"
+    path.write_text("tool_tiers:\n  Deploy: execution\n  codebase_search: read_only\n", encoding="utf-8")
+    cfg = load_config(str(path))
+    assert cfg.tool_tiers == {"deploy": "execution", "codebase_search": "read_only"}
+
+
+def test_misspelled_tool_tier_raises(tmp_path):
+    # A typo must not quietly leave the tool unclassified.
+    path = tmp_path / "guard.yaml"
+    path.write_text("tool_tiers:\n  deploy: exection\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="deploy"):
+        load_config(str(path))
+
+
+def test_shipped_defaults_protect_skill_and_policy_files():
+    cfg = load_config(None)
+    assert cfg.tool_tiers == {}
+    assert cfg.self_modification_paths == ["SKILL.md", "guard.yaml"]

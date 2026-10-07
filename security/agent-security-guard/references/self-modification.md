@@ -22,6 +22,13 @@ ASG cannot force the host to call it. If Hermes patches internally without a
 guard call, `policy.py` can be perfect and the file still changes. Therefore the
 real acceptance check lives in the host, against the criteria below.
 
+A skill file changed through an ordinary file tool is covered as well: a
+recognized file tool (`write_file`, `edit`, `patch`, `apply_patch`, ...) whose
+target, or patch body, names a path in `self_modification_paths` (`SKILL.md`
+and `guard.yaml` by default) is evaluated as self-modification, as is the
+`skill_manage` tool. That closes the route around `skill_patch`; it does not
+change the paragraph above, since the host still has to call the guard.
+
 ## What the host MUST do
 
 > This fix is only complete when Hermes self-improvement / skill-patch no longer
