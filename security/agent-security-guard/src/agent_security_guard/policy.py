@@ -19,7 +19,7 @@ import re
 from typing import Any, Dict, List, Optional
 from urllib.parse import unquote, urlsplit
 
-from . import _miniyaml
+from . import _miniyaml, config_check
 from .actions import recognized_by_name_only, sends_to_remote
 from .host_tools import UNTRUSTED_CONTENT_TOOLS
 from .memory_lanes import (
@@ -203,8 +203,11 @@ _MERGED_SECTIONS = ("tiers", "audit", "limits", "tool_tiers", "memory_lanes")
 def load_config(path: Optional[str] = None) -> GuardConfig:
     """Load ``guard.yaml`` merged over built-in defaults.
 
-    A missing file yields the defaults. A malformed file raises (fail loud):
-    a security policy must never silently fall back to weaker defaults.
+    A missing file yields the defaults. A file that cannot be read, or that
+    holds an entry the guard cannot apply as written (an unknown setting, an
+    unknown mode, a pattern that does not compile, text where a list belongs),
+    raises ``ValueError`` naming every such entry: a security policy is
+    applied as its operator wrote it or not at all, never as something else.
     """
     merged: Dict[str, Any] = _deep_copy_defaults()
     if path and os.path.exists(path):
@@ -212,6 +215,17 @@ def load_config(path: Optional[str] = None) -> GuardConfig:
             loaded = _miniyaml.load(handle.read())
         if not isinstance(loaded, dict):
             raise ValueError("guard.yaml must be a mapping at the top level")
+        found = config_check.problems(
+            loaded,
+            DEFAULT_CONFIG,
+            _DECISION_BY_NAME,
+            {"tool_tiers": _validated_tool_tiers, "memory_lanes": validated_memory_lanes},
+        )
+        if found:
+            raise ValueError(
+                f"{len(found)} entr{'y' if len(found) == 1 else 'ies'} cannot be "
+                "applied as written: " + "; ".join(found)
+            )
         for key, value in loaded.items():
             if key in _MERGED_SECTIONS and isinstance(value, dict):
                 merged[key] = {**merged.get(key, {}), **value}
@@ -219,23 +233,28 @@ def load_config(path: Optional[str] = None) -> GuardConfig:
                 merged[key] = value
     return GuardConfig(
         mode=merged["mode"],
-        domain_allowlist=list(merged.get("domain_allowlist", [])),
-        tiers=dict(merged.get("tiers", {})),
-        sensitive_paths=list(merged.get("sensitive_paths", [])),
-        secret_patterns=list(merged.get("secret_patterns", [])),
+        domain_allowlist=_texts(merged.get("domain_allowlist")),
+        tiers={key: str(value).strip().lower() for key, value in merged["tiers"].items()},
+        sensitive_paths=_texts(merged.get("sensitive_paths")),
+        secret_patterns=_texts(merged.get("secret_patterns")),
         audit=dict(merged.get("audit", {})),
         limits=dict(merged.get("limits", {})),
-        on_error=str(merged.get("on_error", "degrade")),
-        scope_from_text=bool(merged.get("scope_from_text", False)),
+        on_error=str(merged.get("on_error", "degrade")).strip().lower(),
+        scope_from_text=config_check.as_bool(merged.get("scope_from_text", False)),
         tool_tiers=_validated_tool_tiers(merged.get("tool_tiers")),
-        self_modification_paths=list(merged.get("self_modification_paths") or []),
+        self_modification_paths=_texts(merged.get("self_modification_paths")),
         untrusted_content_tools=[
-            str(pattern).strip().lower()
-            for pattern in (merged.get("untrusted_content_tools") or [])
+            pattern.strip().lower()
+            for pattern in _texts(merged.get("untrusted_content_tools"))
         ],
-        wrap_tool_results=bool(merged.get("wrap_tool_results", True)),
+        wrap_tool_results=config_check.as_bool(merged.get("wrap_tool_results", True)),
         memory_lanes=validated_memory_lanes(merged.get("memory_lanes")),
     )
+
+
+def _texts(value: Any) -> List[str]:
+    """A list setting as a list of strings (``- 8080`` is the text ``8080``)."""
+    return [str(item) for item in (value or [])]
 
 
 def _validated_tool_tiers(raw: Any) -> Dict[str, str]:

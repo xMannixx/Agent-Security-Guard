@@ -180,6 +180,31 @@ including `test_availability.py`, passes unchanged.
   `file:` URLs resolved, also for a file tool writing `SKILL.md`; `confirm`
   checks again with symbolic links resolved right before the write. Without
   `workspace_root` nothing is confined, as before; Hermes passes none.
+- **A policy file is applied as written or not at all.** The loader took
+  `guard.yaml` as far as it could read it and replaced the rest with something
+  else, without a word. Several of these left a weaker policy than the one
+  written:
+  - a list on one line (`sensitive_paths: [".env", "*.pem"]`) was read as text
+    and then taken apart into single characters, which match no file;
+  - of two entries with the same key the later one won, so a second `tiers:`
+    block dropped the first;
+  - an unknown `mode` ran as the default mode, an unknown `on_error` as
+    `degrade`, `scope_from_text: no` as on (any word but nothing counted as
+    true);
+  - an unknown `audit.backend` opened no file and recorded nothing;
+  - a `secret_patterns` entry that does not compile was left out;
+  - a misspelled setting (`sensitve_paths`, `tiers.shel_from_user`) or tier
+    value (`denny`) was ignored and the built-in value stayed in force.
+
+  One-line lists and mappings are now read as what they are. Everything else
+  above makes `load_config` raise, with every such entry in the message and a
+  "did you mean" for a misspelled name. The plugin then runs on the built-in
+  defaults and reports the entries in its log, in `config_error` and in
+  `guard_status()`; the CLI prints them and exits with 2. `AuditLog` raises on
+  an unknown backend, and `none` is the way to switch audit off on purpose.
+- **A mistyped `AGENT_SECURITY_GUARD_MODE` no longer replaces the configured
+  mode.** `strct` selected the default mode, also over a configured `strict`.
+  The override is ignored with a warning.
 - **The memory bridge no longer trusts a source it has no entry for.** Only
   `tool`, `external` and `inference` counted as untrusted, so a preference
   "from `web`" was allowed. Anything but `observation` and `conversation` is
@@ -216,6 +241,11 @@ including `test_availability.py`, passes unchanged.
 - A memory write that names no lane, or one the guard does not know, is
   `allow_with_warning` on a trusted origin (`UNKNOWN_MEMORY_LANE_AUDITED`)
   where it was a plain, unaudited `allow`.
+- **A `guard.yaml` that loaded before may be refused now** if it contains a
+  setting the guard does not know, a value it cannot use, or a key twice.
+  Nothing in such a file was applied as its author meant it. Run
+  `python -m agent_security_guard --config guard.yaml scan x` to see what it
+  says.
 - **Recognizing a host tool does not gate it more.** On a trusted or
   unspecified origin with nothing pointing at danger, `terminal`, `write_file`
   and the like are allowed and audited as they were while unrecognized

@@ -66,3 +66,13 @@ def test_audit_roundtrip_via_cli(tmp_path, capsys):
     assert rc == 0
     assert len(out) == 1
     assert out[0]["reason_code"] == "UNTRUSTED_TO_SHELL"
+
+
+def test_policy_file_that_cannot_be_applied_is_an_error_not_a_traceback(tmp_path, capsys):
+    policy = tmp_path / "guard.yaml"
+    policy.write_text("mode: stict\n", encoding="utf-8")
+    rc = main(["--config", str(policy), "scan", "hello"])
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert captured.out == ""
+    assert "stict" in captured.err

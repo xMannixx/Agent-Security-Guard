@@ -10,6 +10,16 @@
 #   the copy shipped next to the plugin (this file)
 # It does NOT load a guard.yaml from the working directory. That is the agent's
 # workspace, and a policy file placed there could switch the guard off.
+#
+# The file is applied as written or not at all. A setting the guard does not
+# know, a value it cannot use (an unknown mode, a pattern that does not
+# compile, text where a list belongs) or a key given twice makes it refuse the
+# whole file: it then runs on the built-in defaults, logs every entry it could
+# not apply, and reports them as `config_error` in its decisions. Check a file
+# with:  python -m agent_security_guard --config guard.yaml scan x
+#
+# Syntax: `key: value`, nested by two spaces, `- item` lists. A list or a
+# mapping may also be written on one line: [a, b] and {key: value}.
 
 # monitor         -> never blocks. Logs what it WOULD have blocked
 #                    (decision=allow_with_warning, advisory_decision=...).
@@ -34,7 +44,7 @@ mode: autonomous-safe
 #               are blocked until the guard works again.
 #   deny_all -> Block everything. Safest, but a broken install takes the
 #               host down completely. The natural partner of `mode: strict`.
-# A guard.yaml that cannot be parsed is a different case: the engine keeps
+# A guard.yaml that cannot be applied is a different case: the engine keeps
 # evaluating on the built-in defaults and its decisions carry `config_error`.
 on_error: degrade
 
@@ -250,6 +260,7 @@ secret_patterns:
   - "(?i)\\b(?:postgres(?:ql)?|mysql|mariadb|mongodb|rediss?|amqps?|mssql)(?:\\+[a-z0-9]+)?://([^\\s:/@]*):(?!\\1@|(?:pass(?:word|wd)?|pwd|secret|changeme|example|x{3,})@|\\$[{(a-z_]|[<{\\[*]|%s)[^\\s:/@]{3,}@"
   - "-----BEGIN (RSA |EC |OPENSSH |DSA |ENCRYPTED |PGP )?PRIVATE KEY( BLOCK)?-----"
 
+# backend: sqlite, jsonl, both, or none (no audit, on purpose).
 audit:
   backend: sqlite
   path: "guard-audit.db"

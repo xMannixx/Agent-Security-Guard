@@ -77,3 +77,20 @@ def test_last_limit(tmp_path):
         log.record(build_event(f"e{i}", _decision()))
     assert len(log.last(4)) == 4
     log.close()
+
+
+def test_unknown_backend_raises_instead_of_recording_nothing(tmp_path):
+    import pytest
+
+    with pytest.raises(ValueError, match="sqllite"):
+        AuditLog(backend="sqllite", path=str(tmp_path / "audit.db"))
+
+
+def test_backend_none_is_no_audit_on_purpose(tmp_path):
+    log = AuditLog(backend="none", path=str(tmp_path / "audit.db"),
+                   jsonl_path=str(tmp_path / "audit.jsonl"))
+    log.record(build_event("e", _decision()))
+    assert log.last(5) == []
+    assert not (tmp_path / "audit.db").exists()
+    assert not (tmp_path / "audit.jsonl").exists()
+    log.close()

@@ -72,8 +72,11 @@ print(decision.decision.value, decision.reason_code.value)  # deny UNTRUSTED_TO_
 ### Configuration
 
 Behavior is driven by [`guard.yaml`](../guard.yaml). Built-in defaults are used
-when the file is absent; a malformed file fails loudly rather than silently
-weakening policy.
+when the file is absent. A file is applied as written or not at all:
+`load_config` raises `ValueError`, naming every entry, for a setting it does
+not know, a value it cannot use (an unknown `mode` or `audit.backend`, a
+pattern that does not compile, text where a list belongs) and a key given
+twice. It never replaces such an entry with something else.
 
 ```python
 from agent_security_guard import load_config, GuardAdapter
@@ -194,6 +197,16 @@ The plugin loads the first `guard.yaml` it finds in:
 1. `/etc/agent-security-guard/guard.yaml`
 2. `~/.hermes/guard.yaml`
 3. the directory the plugin was installed from
+
+A file it cannot apply as written (see Configuration above) is not applied in
+part: the plugin runs on the built-in defaults, logs the entries at error
+level, and carries them as `config_error` in its decisions and in
+`guard_status()`. A typo therefore costs you your own settings until it is
+fixed, never the guard. To check a file before using it:
+
+```bash
+python -m agent_security_guard --config guard.yaml scan x
+```
 
 It does not load a `guard.yaml` from the working directory. That is the agent's
 workspace: a cloned repository, or the agent itself, could put a file there

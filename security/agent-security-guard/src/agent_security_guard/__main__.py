@@ -53,7 +53,11 @@ def main(argv: Optional[list] = None) -> int:
     audit_p.add_argument("--backend", default=None, choices=["sqlite", "jsonl"])
 
     args = parser.parse_args(argv)
-    config = load_config(args.config)
+    try:
+        config = load_config(args.config)
+    except ValueError as exc:
+        print(f"error: {args.config}: {exc}", file=sys.stderr)
+        return 2
 
     if args.command == "scan":
         return _cmd_scan(args, config)

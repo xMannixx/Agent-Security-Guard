@@ -50,8 +50,12 @@ _COLUMNS = [
 ]
 
 
+_BACKENDS = ("sqlite", "jsonl", "both", "none")
+
+
 class AuditLog:
-    """Append-only audit sink. Backend: ``sqlite`` (default), ``jsonl``, ``both``."""
+    """Append-only audit sink. Backend: ``sqlite`` (default), ``jsonl``,
+    ``both``, or ``none`` for no audit on purpose."""
 
     def __init__(
         self,
@@ -61,7 +65,13 @@ class AuditLog:
         jsonl_path: Optional[str] = None,
     ):
         audit_cfg = dict(config.audit) if config else {}
-        self.backend = (backend or audit_cfg.get("backend") or "sqlite").lower()
+        self.backend = str(backend or audit_cfg.get("backend") or "sqlite").strip().lower()
+        if self.backend not in _BACKENDS:
+            # Any other name used to match neither branch below: no file was
+            # opened, nothing was recorded, and nothing said so.
+            raise ValueError(
+                f"audit backend '{self.backend}' is not one of {', '.join(_BACKENDS)}"
+            )
         self.path = path or audit_cfg.get("path") or "guard-audit.db"
         self.jsonl_path = jsonl_path or audit_cfg.get("jsonl_path") or "guard-audit.jsonl"
         self._conn: Optional[sqlite3.Connection] = None
