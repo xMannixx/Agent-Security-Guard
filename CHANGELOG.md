@@ -6,9 +6,39 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Closes two ways of getting past the guard without beating any rule, found in a
-security review of 0.3.0. Ordinary work is unaffected: every existing test,
-including `test_availability.py`, passes unchanged.
+## [0.4.0] - 2026-10-08
+
+**The findings of a security review of 0.3.0, worked through.** Few of them
+were rules that could be beaten. Most were places where the guard did not
+look, or was made to skip a rule: tools under the names hosts really give
+them, a secret in a request it took for a read, a memory lane under another
+name, a policy file read as something else than was written, a decision that
+never reached the host in the form the host acts on.
+
+0.3.0 made the guard usable in a live host; this release is about it holding
+there. `tests/test_availability.py` still guards the other direction. Two of
+its cases were changed on purpose: a host's memory tool is recognized now, and
+asked about after a web page was read.
+
+What you will notice when upgrading from 0.3.0:
+
+- **Hermes:** after a web page or search result was read in a turn, a shell
+  command, file write, install or memory write in that turn goes to the
+  approval prompt; so does a web request with a query string after a
+  credential file was read. The next turn starts clean. Web results reach the
+  model wrapped as data.
+- **`guard.yaml`** is applied as written or not at all. A file with an unknown
+  setting, an unusable value or a key given twice is refused whole and the
+  built-in defaults apply; the reason is logged and carried in `config_error`.
+  It is no longer read from the working directory. If your file lists
+  `secret_patterns` or `sensitive_paths`, take over the new entries.
+- **The audit trail** moved to `~/.local/state/agent-security-guard/`, records
+  every decision, and can be checked with `audit --verify`.
+- **Command line:** `scan` takes its argument as text (`--file` for a file),
+  and `check-action` exits with 3, not 0, when a confirmation is needed.
+- **Not covered:** what an agent reads, sends or rewrites through a shell
+  command. And none of this has run inside a live Hermes yet; the behavior
+  there was checked against the Hermes source.
 
 ### Security
 

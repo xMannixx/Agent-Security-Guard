@@ -11,7 +11,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.8%2B-blue.svg" alt="Python 3.8+"></a>
   <img src="https://img.shields.io/badge/deps-stdlib%20only-success.svg" alt="Dependencies: stdlib only">
-  <img src="https://img.shields.io/badge/tests-246%20passing-success.svg" alt="Tests: 246 passing">
+  <img src="https://img.shields.io/badge/tests-1246%20passing-success.svg" alt="Tests: 1246 passing">
 </p>
 
 The companion to [`agent-memory`](../Agent%20memory%20skill). The memory skill
@@ -347,6 +347,37 @@ python -m pytest tests -v
 No runtime dependencies — pure stdlib. `pytest` only for development.
 
 ## Status & roadmap
+
+v0.4.0 — the findings of a security review of 0.3.0, worked through
+(1246 tests green). Few of them were rules that could be beaten; most were
+places where the guard did not look or was made to skip a rule.
+
+- **The host's real tools.** The hard rules hold under the names hosts give
+  their tools (`terminal`, `write_file`, `skill_manage`, `memory`, ...) and
+  under the call shapes they use, and decisions reach Hermes in the form it
+  acts on (`block` / `approve`).
+- **Content the agent read.** Web results are wrapped as data, and after
+  outside content was read in a turn a state change in that turn asks first.
+- **Secrets.** A secret in any request is denied, also through the host's own
+  web, search and browser tools; more credential formats and credential files
+  are recognized; a data-carrying request after a secret read asks.
+- **Memory.** Lanes are read in one place: no other spelling of a privileged
+  lane, no missing lane and no missing source gets a rule or a permission into
+  memory unasked.
+- **The guard itself.** A confirmed skill patch is the patch that is written;
+  `guard.yaml` is applied as written or not at all, and never read from the
+  working directory; the audit trail lives outside the workspace, private and
+  hash-chained; the guard's code is loaded by its location, and a file tool
+  that writes it needs approval.
+- **Around it.** On the command line only exit code 0 means "go ahead"; CI runs
+  with a read-only token, pinned actions and pinned test dependencies, and
+  CodeQL.
+
+Still open, and said where it matters in the docs: what an agent reads, sends
+or rewrites through a **shell command** is not seen, and the release has **not
+yet run inside a live Hermes** (its behavior there was checked against the
+Hermes source). Upgrade notes are at the top of the 0.4.0 entry in
+[CHANGELOG.md](CHANGELOG.md).
 
 v0.3.0 — over-blocking fix (246 tests green). 0.2.x denied nearly every call in a
 live host, including the host's own tools, and `mode`/`tiers` in `guard.yaml`
