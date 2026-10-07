@@ -93,7 +93,7 @@ defaults with `config_error` in its decisions).
 | read-only / GET / search | `allow` | `ALLOW_READ_ONLY` |
 | local read of secret-class content | `require_confirmation` | `SENSITIVE_PATH_READ` |
 | untrusted web/doc -> shell | `deny` | `UNTRUSTED_TO_SHELL` |
-| after a web page or search result was read in the chain: shell, file write, install, config change, external write | `require_confirmation` | `UNTRUSTED_CONTENT_IN_CONTEXT` |
+| after a web page or search result was read in the chain: shell, file write, install, config change, external write, a host memory tool | `require_confirmation` | `UNTRUSTED_CONTENT_IN_CONTEXT` |
 | shell from trusted user | `require_confirmation` | `SHELL_FROM_USER_REQUIRES_CONFIRMATION` |
 | web-suggested command relayed by a bare "yes" | `deny` | `CONFIRMATION_ORIGIN_UNTRUSTED` |
 | install from untrusted | `deny` | `INSTALL_FROM_UNTRUSTED` |
@@ -123,7 +123,7 @@ The rules above are written for the guard's own kinds (`shell`, `http_post`,
 `skill_patch`, ...), but a host forwards its tools under its own names: Hermes
 calls its shell `terminal`, OpenClaw's file writer is `write`. The guard
 recognizes the common ones (`bash`, `terminal`, `execute_code`, `write_file`,
-`edit`, `patch`, `apply_patch`, `send_email`, `skill_manage`, ..., also behind
+`edit`, `patch`, `apply_patch`, `send_email`, `skill_manage`, `memory`, ..., also behind
 a namespace prefix such as `mcp__files__write_file`) and applies the same hard
 rules to them: denied from untrusted content, covered by a no-write scope, part
 of the exfiltration chain, and held to the self-modification bar when they
@@ -173,14 +173,13 @@ The plugin reads the lane and the source from a tool call's arguments
 source there is the model's own claim: it can make a write less trusted, never
 more.
 
-Memory tools are not recognized by name. Hermes' `memory` tool is an
-unrecognized tool by default, so its writes are allowed and audited, also after
-a web page was read. To put it under the rules above:
-
-```yaml
-tool_tiers:
-  memory: memory_write
-```
+A host's memory tool is recognized by name (`memory` in Hermes, `save_memory`,
+`add_memory`, ...). Its calls name no lane, so they follow the rule for that:
+allowed and audited in ordinary work, asked about in a chain that read a web
+page, denied when untrusted content proposed the write. Hermes puts what
+`memory` stores into every later turn, which is why a page should not get a
+line in there unasked. Declare a memory tool with another name as
+`memory_write` in `tool_tiers`; `memory: unknown` takes one out of the rules.
 
 ## Installation
 

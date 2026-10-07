@@ -106,7 +106,8 @@ tiers:
   read_with_data_after_secret: require_confirmation
   # After untrusted content (a web page, search results) was read in the chain:
   # a shell command, file write, install, config change, external write,
-  # self-modification, or a memory write that names no lane the guard knows.
+  # self-modification, or a memory write that names no lane the guard knows
+  # (which is every call of a host's memory tool, such as Hermes' `memory`).
   # The content may be what proposed the action, so the user is asked. Reads and unrecognized tools stay free, and so does an action the
   # host reports as explicitly ordered by the user. In Hermes one user turn is
   # one chain, and the prompt offers "allow for this session" per tool.
@@ -127,13 +128,13 @@ tiers:
 #     cronjob_manage: config_change
 #     my_deploy_tool: execution
 #
-# Memory tools are not recognized by name (Hermes: `memory`). Unrecognized, a
-# memory write is allowed and audited, also after a web page was read. To put
-# it under the memory rules, declare it:
+# Tools that write the agent's memory are recognized by name (`memory`,
+# `save_memory`, `add_memory`, ...): asked about once outside content is in the
+# chain, denied when untrusted content proposed the write, allowed and audited
+# otherwise. If yours has another name, declare it as `memory_write`. To take
+# one out of the rules again:
 #   tool_tiers:
-#     memory: memory_write
-# It is then asked about once outside content is in the chain, and denied when
-# untrusted content proposed it.
+#     memory: unknown
 tool_tiers: {}
 
 # Your memory's own lane names, mapped to the lane they amount to: identity,

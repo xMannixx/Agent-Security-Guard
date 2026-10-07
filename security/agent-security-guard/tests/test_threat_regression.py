@@ -985,50 +985,75 @@ def test_lane_of_a_host_memory_tool_reaches_the_rules(isolated_plugin, hermes_re
     assert hermes_reads(result) == "block"
 
 
-def _with_memory_tool_declared():
-    config = load_config(None)
-    config.tool_tiers = {"memory": "memory_write"}
-    return config
-
+# A host's memory tool names no lane at all. Hermes puts what `memory` stores
+# into every later turn, so a page that gets one line written there keeps its
+# say after the turn is over.
 
 HERMES_MEMORY_ADD = AgentAction(
     kind="memory", target="memory", metadata={"action": "add", "content": PLANTED_RULE}
 )
+PROPOSED_BY_CONTENT = dict(
+    origin_trust=OriginTrust.TRUSTED_USER,
+    user_intent_origin=UserIntentOrigin.UNTRUSTED_SUGGESTION,
+)
 
 
-def test_declared_memory_tool_is_asked_about_after_outside_content():
-    # A tool call that names no lane was judged as an evidence write.
-    config = _with_memory_tool_declared()
-    context = GuardContext(origin_trust=OriginTrust.TRUSTED_USER, config=config)
-    adapter = GuardAdapter(config=config)
-    adapter.guard_action(AgentAction(kind="web_fetch", target="https://evil.test/post"), context)
-    decision = adapter.guard_action(HERMES_MEMORY_ADD, context)
+@pytest.mark.parametrize("tool", [
+    "memory", "save_memory", "add_memory", "memory_store", "mcp__mem0__add_memory",
+])
+def test_host_memory_tool_is_asked_about_after_outside_content(tool):
+    action = AgentAction(kind=tool, metadata={"content": PLANTED_RULE})
+    decision = _after_reading(AgentAction(kind="web_fetch", target="https://evil.test/post"), action)
     assert decision.decision is Decision.REQUIRE_CONFIRMATION
     assert decision.reason_code is ReasonCode.UNTRUSTED_CONTENT_IN_CONTEXT
 
 
-def test_declaring_the_memory_tool_does_not_lift_the_denial_it_had_unrecognized():
-    config = _with_memory_tool_declared()
-    proposed_by_content = dict(
-        origin_trust=OriginTrust.TRUSTED_USER,
-        user_intent_origin=UserIntentOrigin.UNTRUSTED_SUGGESTION,
-    )
-    undeclared = GuardAdapter().guard_action(HERMES_MEMORY_ADD, GuardContext(**proposed_by_content))
-    declared = GuardAdapter(config=config).guard_action(
-        HERMES_MEMORY_ADD, GuardContext(config=config, **proposed_by_content)
-    )
-    assert undeclared.decision is Decision.DENY
-    assert declared.decision is Decision.DENY
-    assert declared.reason_code is ReasonCode.UNTRUSTED_TO_UNKNOWN_MEMORY_LANE
+def test_host_memory_tool_stays_denied_when_untrusted_content_proposed_it():
+    # It was denied as an unrecognized tool; recognizing it must not lift that.
+    decision = GuardAdapter().guard_action(HERMES_MEMORY_ADD, GuardContext(**PROPOSED_BY_CONTENT))
+    assert decision.decision is Decision.DENY
 
 
-def test_hermes_memory_tool_declared_in_guard_yaml_goes_to_the_approval_gate(
-    isolated_plugin, hermes_reads, tmp_path
+def test_host_memory_tool_is_denied_from_an_untrusted_origin():
+    # As an unrecognized tool it passed here: the origin alone does not block
+    # a tool the guard knows nothing about.
+    decision = GuardAdapter().guard_action(HERMES_MEMORY_ADD, FROM_WEB)
+    assert decision.decision is Decision.DENY
+    assert decision.reason_code is ReasonCode.UNTRUSTED_TO_UNKNOWN_MEMORY_LANE
+
+
+def test_declaring_the_memory_tool_does_not_lift_the_denial():
+    config = load_config(None)
+    config.tool_tiers = {"memory": "memory_write"}
+    decision = GuardAdapter(config=config).guard_action(
+        HERMES_MEMORY_ADD, GuardContext(config=config, **PROPOSED_BY_CONTENT)
+    )
+    assert decision.decision is Decision.DENY
+
+
+def test_no_write_scope_covers_the_host_memory_tool(isolated_plugin, hermes_reads):
+    result = isolated_plugin.guard_tool_call(
+        tool_name="memory", args={"action": "add", "target": "user", "content": "x"},
+        no_write_scope=True, short_confirmation=False,
+    )
+    assert result["reason_code"] == "EXPLICIT_NO_WRITE_SCOPE_VIOLATION"
+    assert hermes_reads(result) == "block"
+
+
+def test_strict_mode_still_asks_about_the_host_memory_tool():
+    # Strict asked while the tool was unrecognized; recognizing it must not
+    # make strict weaker.
+    decision = GuardAdapter().guard_action(
+        HERMES_MEMORY_ADD,
+        GuardContext(origin_trust=OriginTrust.TRUSTED_USER, mode="strict",
+                     config=load_config(None)),
+    )
+    assert decision.decision is Decision.REQUIRE_CONFIRMATION
+
+
+def test_hermes_memory_write_in_a_turn_that_read_the_web_goes_to_the_approval_gate(
+    isolated_plugin, hermes_reads
 ):
-    policy = tmp_path / "home" / ".hermes" / "guard.yaml"
-    policy.parent.mkdir(parents=True)
-    policy.write_text("tool_tiers:\n  memory: memory_write\n", encoding="utf-8")
-
     def call(tool, args):
         return isolated_plugin.guard_tool_call(
             tool_name=tool, args=args, session_id="s1", turn_id="turn-1"
@@ -1038,3 +1063,11 @@ def test_hermes_memory_tool_declared_in_guard_yaml_goes_to_the_approval_gate(
     result = call("memory", {"action": "add", "target": "memory", "content": PLANTED_RULE})
     assert result["reason_code"] == "UNTRUSTED_CONTENT_IN_CONTEXT"
     assert hermes_reads(result) == "approve"
+    assert result["rule_key"] == "agent-security-guard:UNTRUSTED_CONTENT_IN_CONTEXT:memory"
+
+
+def test_host_memory_tool_is_blocked_while_the_engine_cannot_evaluate(monkeypatch):
+    monkeypatch.setattr(guard_plugin, "_get_adapter", lambda: None)
+    blocked = guard_plugin.guard_tool_call(tool_name="memory", args={"action": "add"})
+    assert blocked["block"] is True
+    assert blocked["reason_code"] == "GUARD_DEGRADED_DANGEROUS_KIND"

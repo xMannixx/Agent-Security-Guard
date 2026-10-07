@@ -443,6 +443,8 @@ _STATE_CHANGING_KIND_NAMES = frozenset({
     "send_email", "send_mail", "email_send", "upload", "upload_file", "git_push",
     "skill_manage", "skill_update", "create_skill", "update_skill",
     "edit_skill", "patch_skill", "delete_skill",
+    "memory", "save_memory", "add_memory", "store_memory", "update_memory",
+    "memory_add", "memory_save", "memory_store", "memory_update",
 })
 
 
