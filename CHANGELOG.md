@@ -116,6 +116,30 @@ including `test_availability.py`, passes unchanged.
   `observation` there unlocks nothing, and two different lanes in one call do
   not pass as the harmless one. In Hermes an approval of a privileged memory
   write covers that exact write only.
+- **More credentials are recognized as such.** "A secret in a request is
+  denied" and "a secret read gates what follows" hold for what the guard takes
+  for a secret, and it took these for ordinary text and ordinary files:
+  - in content: a key or password written as a quoted name
+    (`"api_key": "..."`, `"password": "..."`, which is how every JSON body
+    carries it), an AWS secret access key, Anthropic and project-scoped OpenAI
+    keys (`sk-ant-...`, `sk-proj-...`), a JWT, GitLab and fine-grained GitHub
+    tokens (`glpat-...`, `github_pat_...`), a connection URL with its password
+    (`postgres://user:pass@host`, also MySQL, MongoDB, Redis, AMQP, MSSQL), and
+    encrypted and PGP private keys;
+  - as files: `token.json`, `auth.json`, `~/.docker/config.json`, the gcloud
+    application default credentials, `id_ed25519` / `id_ecdsa` / `id_dsa`
+    outside `~/.ssh`, `/proc/<pid>/environ`, `~/.gnupg/`, `.pgpass`,
+    `.vault-token`.
+
+  Mentions stay free: a connection URL whose password is a placeholder
+  (`<password>`, `${DB_PASS}`, `password`) or repeats the user name
+  (`postgres:postgres@`), a schema (`"api_key": {"type": ...}`), a search for
+  an error message. `tokens.json`, a project's own `.docker/` directory and
+  `environ.py` are ordinary files. The new patterns are linear in their input.
+
+  **If your `guard.yaml` lists `secret_patterns` or `sensitive_paths`, it
+  replaces the built-in list:** take the new entries over from the shipped
+  file.
 - **The memory bridge no longer trusts a source it has no entry for.** Only
   `tool`, `external` and `inference` counted as untrusted, so a preference
   "from `web`" was allowed. Anything but `observation` and `conversation` is

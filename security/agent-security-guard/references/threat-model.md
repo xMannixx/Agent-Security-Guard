@@ -52,6 +52,22 @@ the content is there, not that the content proposed the action. Reads stay
 free, tools the guard cannot classify stay free, and an action the host reports
 as explicitly ordered by the user is not asked about.
 
+## What the guard takes for a secret
+
+Class 3 and the denial of a secret in a request both start from recognizing
+the secret: by its form in content (`secret_patterns`) or by the file it is
+read from (`sensitive_paths`). What neither list knows passes as ordinary. The
+lists cover the common key and token prefixes, `name = value` pairs also in
+their quoted JSON form, JWTs, connection URLs with a password, private keys,
+and the credential files of the usual tools. They are deliberately lists of
+values and credential files, not of words: a broader net marks ordinary
+project files and ordinary text as secret and then denies the work that
+follows, which is how 0.2.x failed.
+
+Not covered: a secret that is encoded before it is sent (the rule for
+data-carrying requests after a secret read exists for that), a secret read
+through a shell command, and a credential format nobody listed.
+
 ## Memory lanes
 
 Class 2 was written for a write that spelled the lane `authorization` or

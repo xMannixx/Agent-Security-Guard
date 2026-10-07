@@ -185,6 +185,8 @@ self_modification_paths:
 # Do NOT add broad developer-file globs (*.db, *.log, settings.json, config.py):
 # in 0.2.x they marked ordinary project files as sensitive, which denied every
 # subsequent external write for the rest of the session.
+# A pattern ending in `/` is a directory anywhere in the path; any other is
+# matched against the file name and against the whole path.
 sensitive_paths:
   - ".env"
   - ".env.*"
@@ -195,32 +197,56 @@ sensitive_paths:
   - "*.kdbx"
   - "id_rsa"
   - "id_rsa.*"
+  - "id_ed25519"
+  - "id_ed25519_sk"
+  - "id_ecdsa"
+  - "id_ecdsa_sk"
+  - "id_dsa"
   - ".ssh/"
   - ".aws/"
   - ".gcp/"
   - ".azure/"
   - ".kube/"
+  - ".gnupg/"
   - ".npmrc"
   - ".pypirc"
   - ".netrc"
   - ".git-credentials"
+  - ".pgpass"
+  - ".vault-token"
   - "secrets.*"
   - "credentials.*"
+  - "token.json"
+  - "auth.json"
+  - "application_default_credentials.json"
+  - "*.docker/config.json"
+  - "*/proc/*/environ"
 
 # Patterns that mark content as secret-bearing. These match credential
 # *values*, not the mere mention of a credential word: a bare `(?i)api[_-]?key`
-# classified any document discussing API keys as SECRET.
+# classified any document discussing API keys as SECRET. A request to a remote
+# host that carries a match, in its URL or its body, is denied.
+#
+# Listing them here replaces the built-in list, as with every list in this
+# file: when you upgrade, take over the new entries. Keep each pattern linear
+# in its input; the scanner runs them over whole web pages.
 secret_patterns:
-  - "(?i)api[_-]?key\\s*[:=]\\s*[\"']?[A-Za-z0-9._\\-]{16,}"
-  - "(?i)secret[_-]?key\\s*[:=]\\s*[\"']?[A-Za-z0-9._\\-]{16,}"
-  - "(?i)access[_-]?token\\s*[:=]\\s*[\"']?[A-Za-z0-9._\\-]{16,}"
-  - "(?i)password\\s*[:=]\\s*[\"']?[^\\s\"']{8,}"
+  - "(?i)api[_-]?key[\\\"']?\\s*[:=]\\s*[\\\"']?[A-Za-z0-9._\\-]{16,}"
+  - "(?i)secret[_-]?key[\\\"']?\\s*[:=]\\s*[\\\"']?[A-Za-z0-9._\\-]{16,}"
+  - "(?i)access[_-]?token[\\\"']?\\s*[:=]\\s*[\\\"']?[A-Za-z0-9._\\-]{16,}"
+  - "(?i)password[\\\"']?\\s*[:=]\\s*[\\\"']?[^\\s\\\"']{8,}"
+  - "(?i)secret[_-]?access[_-]?key[\\\"']?\\s*[:=]\\s*[\\\"']?[A-Za-z0-9/+=]{40}"
   - "(?i)bearer\\s+[A-Za-z0-9._-]{20,}"
   - "AKIA[0-9A-Z]{16}"
   - "gh[pousr]_[A-Za-z0-9]{30,}"
+  - "github_pat_[A-Za-z0-9_]{40,}"
+  - "glpat-[A-Za-z0-9_\\-]{20,}"
   - "sk-[A-Za-z0-9]{20,}"
+  - "(?<![A-Za-z0-9])sk-(?:ant|proj|svcacct|admin|or)-[A-Za-z0-9_\\-]{20,}"
   - "xox[baprs]-[A-Za-z0-9-]{10,}"
-  - "-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----"
+  - "(?<![A-Za-z0-9_\\-])eyJ[A-Za-z0-9_\\-]{10,}\\.eyJ[A-Za-z0-9_\\-]{10,}\\.[A-Za-z0-9_\\-]{10,}"
+  - "(?i)\\b(?:postgres(?:ql)?|mysql|mariadb|mongodb|rediss?|amqps?|mssql)(?:\\+[a-z0-9]+)?://([^\\s:/@]*):(?!\\1@|(?:pass(?:word|wd)?|pwd|secret|changeme|example|x{3,})@|\\$[{(a-z_]|[<{\\[*]|%s)[^\\s:/@]{3,}@"
+  - "-----BEGIN (RSA |EC |OPENSSH |DSA |ENCRYPTED |PGP )?PRIVATE KEY( BLOCK)?-----"
 
 audit:
   backend: sqlite

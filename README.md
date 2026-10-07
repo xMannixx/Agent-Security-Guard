@@ -181,6 +181,27 @@ page, denied when untrusted content proposed the write. Hermes puts what
 line in there unasked. Declare a memory tool with another name as
 `memory_write` in `tool_tiers`; `memory: unknown` takes one out of the rules.
 
+## What counts as a secret
+
+Two lists in `guard.yaml` decide it. `secret_patterns` are matched against what
+a request sends, its URL and its body: API keys and tokens by their prefix
+(`AKIA`, `ghp_`, `github_pat_`, `glpat-`, `sk-`, `sk-ant-`, `sk-proj-`,
+`xox?-`), `name = value` pairs for `api_key`, `secret_key`, `access_token`,
+`password` and `secret_access_key` (also as quoted JSON names), bearer tokens,
+JWTs, connection URLs with a password, private keys. A match in a request to a
+remote host is denied. `sensitive_paths` name credential files (`.env`,
+`*.pem`, `id_rsa`, `id_ed25519`, `.ssh/`, `.aws/`, `token.json`, `auth.json`,
+`~/.docker/config.json`, `/proc/<pid>/environ`, ...): reading one is allowed
+and audited, and for the rest of the chain an external write is denied.
+
+Both lists match values and credential files, not mentions: a doc about API
+keys, `postgres://user:password@localhost`, `settings.json` or `tokens.json`
+are ordinary. A list in your `guard.yaml` replaces the built-in one.
+
+A token that belongs where it is going (a signed download link with a JWT in
+its query) looks the same as one being carried off. Such a request is denied;
+remove the pattern in `guard.yaml` if your work depends on those links.
+
 ## Installation
 
 Pure standard library — **no runtime dependencies**, Python 3.8+.

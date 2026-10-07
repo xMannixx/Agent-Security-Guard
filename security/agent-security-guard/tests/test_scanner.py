@@ -4,11 +4,14 @@ from pathlib import Path
 import pytest
 
 from agent_security_guard import (
+    DEFAULT_CONFIG,
     DataSensitivity,
     OriginTrust,
     classify_content,
     scan_input,
 )
+from agent_security_guard.patterns import compile_patterns
+from secret_samples import ORDINARY_TEXTS, SECRET_SAMPLES
 
 _CORPUS = json.loads(
     (Path(__file__).parent / "fixtures" / "injection_corpus.json").read_text(
@@ -46,6 +49,33 @@ def test_benign_corpus_is_clean(name, content, expect):
     assert not c.injection_indicators
     assert not c.executable_indicators
     assert not c.secret_indicators
+
+
+@pytest.mark.parametrize("name", sorted(SECRET_SAMPLES))
+def test_credential_formats_are_recognized(name):
+    c = classify_content(SECRET_SAMPLES[name])
+    assert c.secret_indicators, name
+    assert c.data_sensitivity is DataSensitivity.SECRET
+
+
+@pytest.mark.parametrize("name", sorted(SECRET_SAMPLES))
+def test_credential_formats_are_recognized_inside_other_text(name):
+    c = classify_content("deploy notes\n  value: " + SECRET_SAMPLES[name] + "\n-- end")
+    assert c.secret_indicators, name
+
+
+@pytest.mark.parametrize("text", ORDINARY_TEXTS)
+def test_text_that_only_resembles_a_credential_is_not_secret(text):
+    c = classify_content(text)
+    assert not c.secret_indicators, text
+    assert c.data_sensitivity is DataSensitivity.PUBLIC
+
+
+def test_every_built_in_secret_pattern_compiles():
+    # compile_patterns skips what it cannot compile, so a typo in a built-in
+    # pattern would switch that detector off without a word.
+    patterns = DEFAULT_CONFIG["secret_patterns"]
+    assert len(compile_patterns(patterns)) == len(patterns)
 
 
 def test_classify_origin_from_metadata():
