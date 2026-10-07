@@ -20,7 +20,8 @@ from collections import deque
 from enum import Enum
 from typing import Deque, List, Optional
 
-from .actions import classify_action
+from .actions import carries_data_out, classify_action
+from .policy import tier_setting
 from .types import (
     ActionTier,
     AgentAction,
@@ -165,6 +166,25 @@ def check_sequence(
             "A secret was read earlier in this chain; external write is blocked "
             "(exfiltration).",
         ))
+
+    if (
+        SequenceCategory.SECRET_READ in past_categories
+        and tier in (ActionTier.READ_ONLY, ActionTier.DOWNLOAD)
+        and carries_data_out(action)
+    ):
+        # A GET with a query string moves data out just as a POST does, and the
+        # guard cannot see an encoded secret in it. Asked about, not denied:
+        # such requests are ordinary, and a plain GET stays free.
+        setting = tier_setting(
+            context, "read_with_data_after_secret", Decision.REQUIRE_CONFIRMATION
+        )
+        if setting is not Decision.ALLOW:
+            candidates.append(_decide(
+                setting,
+                ReasonCode.SECRET_THEN_EXFIL,
+                "A secret was read earlier in this chain and this request has "
+                "room to carry data out (query string or body).",
+            ))
 
     if current is SequenceCategory.EXECUTION and SequenceCategory.DOWNLOAD in past_categories:
         if _any_untrusted_download(past) or context.origin_trust.is_untrusted:

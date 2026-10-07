@@ -12,6 +12,7 @@ import dataclasses
 import json
 import re
 from typing import Any, Optional
+from urllib.parse import urlsplit
 
 from .host_tools import HOST_TOOL_TIER
 from .types import ActionTier, AgentAction, GuardConfig
@@ -73,7 +74,6 @@ _KIND_TIER = {
 
 # HTTP methods that mutate remote state.
 _WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
-_READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
 _GENERIC_HTTP_KINDS = ("http", "https", "request", "http_request", "fetch")
@@ -110,14 +110,33 @@ def classify_action(
             return ActionTier.READ_ONLY
         return tier
 
-    # Fall back to the method when the kind is unknown but a method is given.
-    method = _method(action)
-    if method in _WRITE_METHODS:
+    # For an unknown kind a write method makes it an external write. A read
+    # method proves nothing: the host names the kind, but the model writes the
+    # arguments, and `method: GET` on a shell tool is still a shell.
+    if _method(action) in _WRITE_METHODS:
         return ActionTier.EXTERNAL_WRITE
-    if method in _READ_METHODS:
-        return ActionTier.READ_ONLY
 
     return ActionTier.UNKNOWN
+
+
+def sends_to_remote(action: AgentAction) -> bool:
+    """True for an action that puts its target on the network: a request to a
+    URL, or a web search (the query goes to the search provider)."""
+    return _is_remote(action.target) or _kind(action) == "web_search"
+
+
+def carries_data_out(action: AgentAction) -> bool:
+    """True when a request to a URL has room for data besides the address: a
+    query string, credentials in the URL, or a body."""
+    if not _is_remote(action.target):
+        return False
+    if action.payload:
+        return True
+    try:
+        parts = urlsplit(action.target.strip())
+    except ValueError:
+        return True
+    return bool(parts.query or parts.username or parts.password)
 
 
 def recognized_by_name_only(
@@ -205,6 +224,9 @@ def _text(value: Any) -> str:
 def _classify_http(action: AgentAction) -> ActionTier:
     method = _method(action)
     if method in _WRITE_METHODS:
+        return ActionTier.EXTERNAL_WRITE
+    # No method but a body: that is a write, not a GET.
+    if method is None and action.payload:
         return ActionTier.EXTERNAL_WRITE
     # Default unspecified HTTP to a read (GET-like).
     return ActionTier.READ_ONLY

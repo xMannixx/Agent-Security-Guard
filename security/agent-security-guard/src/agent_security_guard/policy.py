@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlsplit
 
 from . import _miniyaml
-from .actions import recognized_by_name_only
+from .actions import recognized_by_name_only, sends_to_remote
 from .modes import MODE_STRICT, effective_mode, normalize_mode
 from .types import (
     ActionTier,
@@ -59,6 +59,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "download_inspect": "allow",
         "download_then_execute_untrusted": "deny",
         "download_then_execute_user": "require_confirmation",
+        # After a secret was read in the chain: a GET-like request to a URL
+        # that has room for data (query string, credentials, body). Not a
+        # denial, because such requests are common; a plain GET stays free.
+        "read_with_data_after_secret": "require_confirmation",
         # What to do with an action kind the guard does not recognize. Blocking
         # here is what took hosts down in 0.2.x: an unknown *tool name* is not
         # evidence of danger. Only `strict` mode stops and asks.
@@ -395,6 +399,15 @@ def decide_action(
         if scope_decision is not None:
             return scope_decision
 
+    if tier in (ActionTier.READ_ONLY, ActionTier.DOWNLOAD) and _sends_secret(action, context):
+        # "Read-only" describes the remote side. The request itself is data
+        # leaving the machine, whatever the method.
+        return _deny(
+            ReasonCode.SECRET_EXTERNAL_SEND,
+            "Request to a remote host carries secret-class content; denied "
+            "(exfiltration).",
+        )
+
     if tier is ActionTier.READ_ONLY:
         return _tuned(
             tier_setting(context, "read_only", Decision.ALLOW),
@@ -440,6 +453,10 @@ def decide_action(
         )
 
     return _decide_unknown_action(context)
+
+
+def _sends_secret(action: AgentAction, context: GuardContext) -> bool:
+    return context.data_sensitivity is DataSensitivity.SECRET and sends_to_remote(action)
 
 
 def _decide_unknown_action(context: GuardContext) -> GuardDecision:
