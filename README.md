@@ -373,11 +373,25 @@ places where the guard did not look or was made to skip a rule.
   with a read-only token, pinned actions and pinned test dependencies, and
   CodeQL.
 
-Still open, and said where it matters in the docs: what an agent reads, sends
-or rewrites through a **shell command** is not seen, and the release has **not
-yet run inside a live Hermes** (its behavior there was checked against the
-Hermes source). Upgrade notes are at the top of the 0.4.0 entry in
-[CHANGELOG.md](CHANGELOG.md).
+Since 2026-10-07 this release **runs in a live Hermes** on the author's laptop,
+in `autonomous-safe` with `on_error: degrade` — the enforcing mode, not
+`monitor`. Eight days of that trail, checked with `audit --verify` (589 records,
+none unchained):
+
+| | |
+|---|---|
+| passed without a prompt | 505 (86 %) |
+| confirmation asked | 67 (11 %) — 65 of them `UNTRUSTED_CONTENT_IN_CONTEXT` |
+| denied | 17 — `SELF_MODIFICATION_...` 14, `UNTRUSTED_TO_SHELL` 2, `UNTRUSTED_TO_AUTH_MEMORY` 1 |
+
+Take that as one machine and one user over eight days, not a field test: it
+shows the guard is wired in and does not bring ordinary work to a halt, not
+that the rule set is right for your host.
+
+Still open: what an agent reads, sends or rewrites through a **shell command**
+is not seen. The guard sits on tool calls, so `cat .env`, `curl` or a shell
+rewriting the guard's own files pass it by; running live does not change that.
+Upgrade notes are at the top of the 0.4.0 entry in [CHANGELOG.md](CHANGELOG.md).
 
 v0.3.0 — over-blocking fix (246 tests green). 0.2.x denied nearly every call in a
 live host, including the host's own tools, and `mode`/`tiers` in `guard.yaml`
