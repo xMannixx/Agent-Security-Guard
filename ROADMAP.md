@@ -77,13 +77,23 @@ The findings of the review, worked through one by one:
   and protected from file tools
 - command-line exit codes; CI hardening and CodeQL
 
+## Running live (since 2026-10-07)
+
+0.4.0 runs in a live Hermes on the author's laptop in `autonomous-safe`. In its
+first eight days the trail holds 589 decisions — 505 through without a prompt,
+67 confirmations, 17 denials — and `audit --verify` reports none unchained. What
+this answers: the plugin is wired in, the decisions reach Hermes in the form it
+acts on, and ordinary work is not brought to a halt. What it does not answer:
+whether the rule set fits other hosts and other habits. One machine, one user.
+
 ## Next
 
-- **A run inside a live Hermes.** Everything Hermes-specific was checked
-  against its source and mirrored in tests, never executed there.
 - **Shell commands.** What an agent reads, sends or rewrites through a shell
-  is not seen: `cat .env`, `curl`, replacing the guard's files. This is the
-  largest gap left.
+  is not seen: `cat .env`, `curl`, replacing the guard's files. The guard sits
+  on tool calls, so running live does not touch this. Largest gap left.
+- **More than one host and one user.** The numbers above come from a single
+  laptop. Whether `autonomous-safe` draws the line in the right place for other
+  setups is still open.
 - Wiring Hermes' own self-improvement pipeline to the two-phase gate, which is
   the host's step (see `references/self-modification.md`).
 

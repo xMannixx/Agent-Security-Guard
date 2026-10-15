@@ -182,8 +182,9 @@ the approval prompt (`GUARD_UNREADABLE_CALL`).
 
 ### What the plugin does in Hermes
 
-Checked against the Hermes plugin dispatcher (`hermes_cli/plugins.py`); not run
-inside a live Hermes.
+Checked against the Hermes plugin dispatcher (`hermes_cli/plugins.py`), and
+running in a live Hermes on the author's laptop since 2026-10-07 — one machine,
+one user. The figures from that trail are in the README.
 
 Hermes calls `pre_tool_call` with `tool_name`, `args` and ids (`session_id`,
 `turn_id`, ...). Of the result it reads only `action`: `block` vetoes the call

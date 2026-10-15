@@ -6,6 +6,23 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Documentation
+
+- **0.4.0 runs in a live Hermes**, since 2026-10-07, on the author's laptop in
+  `autonomous-safe` with `on_error: degrade`. The docs said it had only been
+  checked against the Hermes source; that is no longer the case. Eight days of
+  audit trail, `audit --verify` clean (589 records, none unchained):
+
+  | | |
+  |---|---|
+  | passed without a prompt | 505 (86 %) |
+  | confirmation asked | 67 — 65 of them `UNTRUSTED_CONTENT_IN_CONTEXT` |
+  | denied | 17 — `SELF_MODIFICATION_...` 14, `UNTRUSTED_TO_SHELL` 2, `UNTRUSTED_TO_AUTH_MEMORY` 1 |
+
+  This says the plugin is wired in, decisions reach Hermes in the form it acts
+  on, and ordinary work still runs. It does not say the rule set fits other
+  hosts: one machine, one user, eight days. The shell gap is untouched by it.
+
 ## [0.4.0] - 2026-10-08
 
 **The findings of a security review of 0.3.0, worked through.** Few of them
@@ -37,8 +54,11 @@ What you will notice when upgrading from 0.3.0:
 - **Command line:** `scan` takes its argument as text (`--file` for a file),
   and `check-action` exits with 3, not 0, when a confirmation is needed.
 - **Not covered:** what an agent reads, sends or rewrites through a shell
-  command. And none of this has run inside a live Hermes yet; the behavior
-  there was checked against the Hermes source.
+  command. The guard sits on tool calls, so a shell passes it by.
+
+At the time of this release nothing here had run inside a live Hermes; the
+behavior there was checked against the Hermes source. It has since — see
+[Unreleased].
 
 ### Security
 
