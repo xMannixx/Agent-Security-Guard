@@ -769,10 +769,47 @@ def _written_paths(action: AgentAction) -> List[str]:
     return [path for path in paths if path and path != "/dev/null"]
 
 
+def _file_url_to_path(url: str) -> str:
+    """The filesystem path a ``file:`` target names.
+
+    Windows paths survive this badly if the URL is only split: ``file://D:\\a``
+    has no ``/`` after the authority, so the whole path lands in the netloc and
+    ``.path`` comes back empty — which then resolves to the working directory
+    and matches nothing. Both the drive-in-netloc and the ``file:///C:/a``
+    shapes are handled here.
+    """
+    parts = urlsplit(url)
+    path = unquote(parts.path)
+    netloc = unquote(parts.netloc)
+    if netloc:
+        if not path or _DRIVE.match(netloc):
+            # file://D:\a\b  or  file://C:/a/b
+            return netloc + path
+        # A real authority (file://host/share) is left as it came.
+    if _LEADING_DRIVE.match(path):
+        return path[1:]  # file:///C:/a/b -> C:/a/b
+    return path
+
+
+_DRIVE = re.compile(r"^[A-Za-z]:")
+_LEADING_DRIVE = re.compile(r"^/[A-Za-z]:")
+
+
+def _comparable(path: str) -> str:
+    """One spelling per file, so two names for it compare equal.
+
+    ``normcase`` is what makes this right on Windows, where paths are
+    case-insensitive and may be written with either separator; on POSIX it
+    does nothing.
+    """
+    return os.path.normcase(os.path.realpath(os.path.expanduser(path)))
+
+
 # Where the guard's own code lives: this package, and whatever a host
 # integration adds (its plugin directory, the places it loads the package
-# from). A file written there is the guard at its next start.
-_OWN_CODE: List[str] = [os.path.dirname(os.path.realpath(__file__))]
+# from). A file written there is the guard at its next start. Kept in the
+# comparable spelling, since that is how they are matched.
+_OWN_CODE: List[str] = [_comparable(os.path.dirname(os.path.realpath(__file__)))]
 
 
 def protect_guard_files(*paths: Any) -> None:
@@ -784,7 +821,7 @@ def protect_guard_files(*paths: Any) -> None:
     protecting before anything is in it.
     """
     for path in paths:
-        resolved = os.path.realpath(os.path.expanduser(str(path)))
+        resolved = _comparable(str(path))
         if resolved not in _OWN_CODE:
             _OWN_CODE.append(resolved)
 
@@ -792,12 +829,23 @@ def protect_guard_files(*paths: Any) -> None:
 def _is_guard_code(path: str) -> bool:
     target = path.strip()
     if target.lower().startswith("file:"):
-        target = unquote(urlsplit(target).path)
-    try:
-        full = os.path.realpath(os.path.expanduser(target))
-        return any(os.path.commonpath([root, full]) == root for root in _OWN_CODE)
-    except (OSError, ValueError):  # unreadable, or nothing in common at all
+        target = _file_url_to_path(target)
+    if not target:
         return False
+    try:
+        full = _comparable(target)
+    except (OSError, ValueError):
+        return False
+    for root in _OWN_CODE:
+        try:
+            if os.path.commonpath([root, full]) == root:
+                return True
+        except ValueError:
+            # Different drives on Windows, or a mix of absolute and relative:
+            # no shared prefix with *this* root, which is not an answer about
+            # the others.
+            continue
+    return False
 
 
 def _changes_the_agent(action: AgentAction, context: GuardContext) -> bool:
