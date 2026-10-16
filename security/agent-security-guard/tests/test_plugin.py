@@ -1,5 +1,6 @@
 """Dummy Hermes/OpenClaw host exercising the plugin hooks."""
 
+import json
 from pathlib import Path
 
 import plugin as guard_plugin
@@ -516,3 +517,58 @@ def test_status_says_where_the_code_came_from():
 
     status = guard_plugin.guard_status()
     assert status["loaded_from"] == str(Path(agent_security_guard.__file__).parent)
+
+
+def _plugin_with_trail(monkeypatch, tmp_path):
+    from agent_security_guard import AuditLog, GuardAdapter, load_config
+
+    audit = AuditLog(backend="sqlite", path=str(tmp_path / "a.db"))
+    adapter = GuardAdapter(config=load_config(None), audit=audit)
+    monkeypatch.setattr(guard_plugin, "_get_adapter", lambda: adapter)
+    ctx = DummyCtx()
+    guard_plugin.register(ctx)
+    return ctx.hooks["pre_tool_call"], audit
+
+
+def test_trail_names_the_tool_hermes_called_and_not_what_it_was_called_with(monkeypatch, tmp_path):
+    hook, audit = _plugin_with_trail(monkeypatch, tmp_path)
+    hook(tool_name="write_file",
+         args={"path": "/home/u/notes.txt", "content": "the secret plan"})
+    row = audit.last(1)[0]
+    audit.close()
+    assert row["tool"] == "write_file"
+    assert "notes.txt" not in json.dumps(row)
+    assert "secret plan" not in json.dumps(row)
+
+
+def test_trail_from_hermes_without_sensitivity_or_channel_records_none(monkeypatch, tmp_path):
+    hook, audit = _plugin_with_trail(monkeypatch, tmp_path)
+    hook(tool_name="read_file", args={"path": "README.md"})
+    row = audit.last(1)[0]
+    audit.close()
+    assert row["data_sensitivity"] is None
+    assert (row["source"], row["channel"]) == (None, None)
+
+
+def test_trail_records_the_sensitivity_the_guard_found(monkeypatch, tmp_path):
+    hook, audit = _plugin_with_trail(monkeypatch, tmp_path)
+    hook(tool_name="read_file", args={"path": ".env"})
+    row = audit.last(1)[0]
+    audit.close()
+    assert row["data_sensitivity"] == "sensitive"
+
+
+def test_trail_records_a_sensitivity_the_host_stated(monkeypatch, tmp_path):
+    hook, audit = _plugin_with_trail(monkeypatch, tmp_path)
+    hook(tool_name="read_file", args={"path": "README.md"}, data_sensitivity="public")
+    row = audit.last(1)[0]
+    audit.close()
+    assert row["data_sensitivity"] == "public"
+
+
+def test_misspelled_sensitivity_counts_as_not_stated(monkeypatch, tmp_path):
+    hook, audit = _plugin_with_trail(monkeypatch, tmp_path)
+    hook(tool_name="read_file", args={"path": "README.md"}, data_sensitivity="publik")
+    row = audit.last(1)[0]
+    audit.close()
+    assert row["data_sensitivity"] is None

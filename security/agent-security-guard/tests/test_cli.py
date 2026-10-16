@@ -274,3 +274,18 @@ def test_scope_flags_in_the_context_are_applied(tmp_path, capsys, flag, reason):
     rc = main(["check-action", "--json", _spec(tmp_path, spec)])
     assert json.loads(capsys.readouterr().out)["reason_code"] == reason
     assert rc == 1
+
+
+@pytest.mark.parametrize("context,stated", [
+    ({}, False),
+    ({"data_sensitivity": ""}, False),
+    ({"data_sensitivity": "public"}, True),
+    ({"data_sensitivity": "secret"}, True),
+])
+def test_check_action_file_says_whether_it_stated_a_sensitivity(context, stated):
+    from agent_security_guard import load_config
+    from agent_security_guard.__main__ import _read_spec
+
+    spec = {"action": {"kind": "read_file", "target": "x"}, "context": context}
+    _, built = _read_spec(spec, load_config(None))
+    assert built.data_sensitivity_stated is stated

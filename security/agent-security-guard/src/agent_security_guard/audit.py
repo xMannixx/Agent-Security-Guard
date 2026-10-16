@@ -44,6 +44,7 @@ except ImportError:  # pragma: no cover
 from .types import (
     ActionTier,
     AgentAction,
+    DataSensitivity,
     GuardConfig,
     GuardContext,
     GuardDecision,
@@ -66,6 +67,7 @@ CREATE TABLE IF NOT EXISTS events (
   action_hash TEXT,
   chain_id TEXT,
   message TEXT,
+  tool TEXT,
   prev_hash TEXT,
   hash TEXT
 );
@@ -74,8 +76,12 @@ CREATE TABLE IF NOT EXISTS events (
 _COLUMNS = [
     "ts", "event_type", "action_tier", "decision", "reason_code", "source",
     "channel", "origin_trust", "data_sensitivity", "input_hash", "action_hash",
-    "chain_id", "message",
+    "chain_id", "message", "tool",
 ]
+# Columns added after records were chained. They are hashed only where they
+# hold a value, so a record written before they existed still verifies, and
+# one that is filled in, changed or emptied afterwards does not.
+_ADDED_COLUMNS = ("tool",)
 # The two columns that link a record to the one before it.
 _CHAIN_COLUMNS = ["prev_hash", "hash"]
 
@@ -152,7 +158,8 @@ class AuditLog:
         )
         self._conn.executescript(_SCHEMA)
         present = {row[1] for row in self._conn.execute("PRAGMA table_info(events)")}
-        for column in _CHAIN_COLUMNS:  # a database from before records were chained
+        # A database from before records were chained, or before a column was added.
+        for column in _CHAIN_COLUMNS + list(_ADDED_COLUMNS):
             if column not in present:
                 self._conn.execute(f"ALTER TABLE events ADD COLUMN {column} TEXT")
 
@@ -308,7 +315,10 @@ def _make_private(path: str, keep_open: bool = False) -> int:
 def _chain_hash(previous: str, data: Dict[str, Any]) -> str:
     """Hash of a record together with the hash of the record before it."""
     body = json.dumps(
-        {col: data.get(col) for col in _COLUMNS},
+        {
+            col: data.get(col) for col in _COLUMNS
+            if col not in _ADDED_COLUMNS or data.get(col) is not None
+        },
         sort_keys=True, ensure_ascii=False, separators=(",", ":"),
     )
     return hashlib.sha256(f"{previous}\n{body}".encode("utf-8", errors="replace")).hexdigest()
@@ -381,22 +391,41 @@ def build_event(
     input_hash: Optional[str] = None,
     chain_id: Optional[str] = None,
 ) -> GuardEvent:
-    """Assemble a ``GuardEvent`` from a decision plus action/context."""
+    """Assemble a ``GuardEvent`` from a decision plus action/context.
+
+    Of the action only the tool's name is kept, never its target, arguments
+    or payload. Where the host stated no channel, ``source`` and ``channel``
+    are ``None``; where it stated no sensitivity and the guard found none,
+    ``data_sensitivity`` is ``None`` rather than ``public``.
+    """
+    channel_name = (context.current_channel if context else None) or None
     return GuardEvent(
         ts=datetime.now(timezone.utc).isoformat(),
         event_type=event_type,
         decision=decision.decision.value,
         reason_code=decision.reason_code.value,
         action_tier=tier.value if tier else None,
-        source=source or (context.current_channel if context else None),
-        channel=channel or (context.current_channel if context else None),
+        source=source or channel_name,
+        channel=channel or channel_name,
         origin_trust=context.origin_trust.value if context else None,
-        data_sensitivity=context.data_sensitivity.value if context else None,
+        data_sensitivity=_recorded_sensitivity(context),
         input_hash=input_hash,
         action_hash=action_hash(action) if action else None,
         chain_id=chain_id or (context.chain_id if context else None),
         message=decision.message,
+        tool=(action.kind or None) if action else None,
     )
+
+
+def _recorded_sensitivity(context: Optional[GuardContext]) -> Optional[str]:
+    """``public`` only where someone said so or the guard found something
+    higher; a value nobody stated is not a finding."""
+    if context is None:
+        return None
+    sensitivity = context.data_sensitivity
+    if not context.data_sensitivity_stated and sensitivity is DataSensitivity.PUBLIC:
+        return None
+    return sensitivity.value
 
 
 def action_hash(action: AgentAction) -> str:
