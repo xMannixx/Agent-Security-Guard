@@ -190,6 +190,13 @@ guard's state directory, `~/.local/state/agent-security-guard/` (or under
 alone (`0600`). A file tool that targets it is held to the same bar as one
 that targets `guard.yaml`.
 
+A record holds the decision and its reason code, the tier, the tool's name
+(`tool`) and a hash of the whole action, not its target, arguments or
+payload. What the host does not pass stays empty instead of taking a default:
+`source` and `channel` without a channel, `data_sensitivity` unless the host
+stated one or the guard found a sensitive path or a secret. `origin_trust`
+reads `unspecified` where the host gave no provenance.
+
 Each record carries the hash of the record before it. `audit --verify` walks
 that chain and fails when a record was edited, removed from the middle or the
 start, or put in afterwards. What it cannot show: that the newest records were
@@ -347,6 +354,12 @@ python -m pytest tests -v
 No runtime dependencies — pure stdlib. `pytest` only for development.
 
 ## Status & roadmap
+
+v0.4.1 — the audit trail names the tool each decision was about (the name
+only), and leaves `data_sensitivity`, `source` and `channel` empty where
+nothing was stated instead of writing `public` and `''`. Records from 0.4.0
+still verify. Decisions are unchanged. On Windows the guard's own files are
+now recognized, so a file tool writing them is denied there too.
 
 v0.4.0 — the findings of a security review of 0.3.0, worked through
 (1246 tests green). Few of them were rules that could be beaten; most were
