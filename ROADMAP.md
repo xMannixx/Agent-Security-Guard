@@ -86,6 +86,12 @@ this answers: the plugin is wired in, the decisions reach Hermes in the form it
 acts on, and ordinary work is not brought to a halt. What it does not answer:
 whether the rule set fits other hosts and other habits. One machine, one user.
 
+## 0.4.1 — What the trail holds (done)
+
+Read against the live trail: it now names the tool each decision was about,
+and leaves `data_sensitivity`, `source` and `channel` empty where nothing was
+stated. The guard's own files are recognized on Windows.
+
 ## Next
 
 - **Shell commands.** What an agent reads, sends or rewrites through a shell

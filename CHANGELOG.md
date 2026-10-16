@@ -6,6 +6,38 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-16
+
+**The audit trail says which tool was called, and no longer fills in what
+nobody stated.** Read against a live Hermes, the trail could not tell which
+tool a decision was about, and three of its columns looked like findings
+where they were defaults. Decisions are unchanged; only what is recorded
+changed.
+
+### Changed
+
+- **The audit trail names the tool.** A new column `tool` holds the name the
+  host gave the tool (`terminal`, `write_file`, ...): the name only, never the
+  target, arguments or payload. An existing database gets the column the next
+  time it is opened. The hash covers `tool` where it is set, so records
+  written before 0.4.1 still pass `audit --verify`, and a name that is
+  changed, removed or put in afterwards does not.
+- **`data_sensitivity` is empty where nothing was stated.** It used to read
+  `public` whenever the host passed no sensitivity, which Hermes never does.
+  It is now `public` only where the host said so; `sensitive` or `secret`
+  where the guard found a sensitive path or a secret, as before; and empty
+  otherwise. Decisions still take an unstated sensitivity as `public`.
+- **`source` and `channel` are empty, not `''`,** where the host passes no
+  channel.
+
+### Fixed
+
+- **Windows: the guard's own files are recognized.** A file tool writing the
+  guard's code came back `allow_with_warning` instead of `deny`: a `file:` URL
+  holding a Windows path resolved to the working directory, and paths were
+  compared as written although Windows ignores case and accepts either
+  separator. Linux and macOS are unchanged.
+
 ### Documentation
 
 - **0.4.0 runs in a live Hermes**, since 2026-10-07, on the author's laptop in
