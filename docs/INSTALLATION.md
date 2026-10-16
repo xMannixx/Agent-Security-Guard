@@ -111,6 +111,29 @@ New-Item -ItemType Directory -Force "$HOME\.hermes\agent-security-guard"
 Copy-Item -Recurse "security\agent-security-guard\*" "$HOME\.hermes\agent-security-guard\"
 ```
 
+### On Windows
+
+The suite runs on Windows (1234 passing, 12 skipped) and the rules decide the
+same way. Three protections are POSIX-only and are **absent** there — they are
+the skipped tests, not untested ground:
+
+| Absent on Windows | What it does elsewhere |
+|---|---|
+| Audit trail file mode | The trail is created readable by its owner alone (`0600`), and an existing one that others can read is tightened. On Windows it inherits whatever the directory grants. |
+| Link-following protection | `O_NOFOLLOW` keeps a link planted in place of the trail from being written through. Windows has no equivalent flag here, so that check is off. |
+| Refusing a world-writable copy | A package copy any account on the machine can rewrite is not loaded. The check reads POSIX file modes and returns "no objection" on Windows. |
+
+None of this stops the guard from working; it means that on a machine with
+several accounts, Windows gives the trail and the guard's own code less
+protection from the *other* accounts than Linux or macOS do. On a single-user
+machine the difference is small.
+
+Location 1 below is POSIX-shaped and resolves to the drive root on Windows,
+where nothing is installed, so in practice the copy in your home directory is
+the one that loads.
+
+### Where the code is loaded from
+
 The plugin loads the guard's code from the first of these that holds a copy:
 
 1. `/usr/local/lib/agent-security-guard/src`

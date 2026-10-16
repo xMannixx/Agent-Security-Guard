@@ -373,6 +373,11 @@ places where the guard did not look or was made to skip a rule.
   with a read-only token, pinned actions and pinned test dependencies, and
   CodeQL.
 
+CI runs the suite on Linux, macOS and Windows. On Windows twelve tests are
+skipped rather than run: the audit file mode, link-following protection and the
+refusal to load a world-writable copy are POSIX-only and absent there. See
+[docs/INSTALLATION.md](docs/INSTALLATION.md#on-windows).
+
 Since 2026-10-07 this release **runs in a live Hermes** on the author's laptop,
 in `autonomous-safe` with `on_error: degrade` — the enforcing mode, not
 `monitor`. Eight days of that trail, checked with `audit --verify` (589 records,
