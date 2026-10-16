@@ -484,7 +484,10 @@ def test_package_that_fails_to_load_leaves_nothing_behind(tmp_path):
 
 def test_locations_are_tried_from_the_one_the_agent_cannot_write_to():
     system, beside_the_plugin, in_home = guard_plugin._package_locations()
-    assert str(system).startswith("/usr/local/lib/")
+    # as_posix, not str: on Windows the same Path prints with backslashes.
+    # The location stays POSIX-shaped there and resolves to the drive root,
+    # where nothing is installed, so it is inert rather than wrong.
+    assert system.as_posix().startswith("/usr/local/lib/")
     assert beside_the_plugin.parent.parent.parent == guard_plugin._PLUGIN_DIR.parent
     assert ".hermes" in in_home.parts
 

@@ -803,6 +803,14 @@ def test_source_name_cannot_forge_a_provenance_field():
     "\n" * 400_000,              # blank lines
     "\t\n" * 200_000,
     "<!-- a -->" * 40_000,
+], ids=[
+    # Named on purpose: pytest puts the test id in PYTEST_CURRENT_TEST, and
+    # Windows refuses an environment variable over 32767 characters. Unnamed,
+    # the payload itself becomes the id and every case errors there.
+    "unclosed-comment-openers",
+    "blank-lines",
+    "tabs-and-newlines",
+    "closed-comments",
 ])
 def test_scanner_stays_fast_on_content_built_to_stall_it(content):
     started = time.perf_counter()
@@ -1472,7 +1480,14 @@ def _start_host(tmp_path, plugin_parent, code):
     environment = {
         key: value for key, value in os.environ.items() if key != "PYTHONPATH"
     }
-    environment["HOME"] = str(tmp_path / "home")
+    home = tmp_path / "home"
+    environment["HOME"] = str(home)
+    # Path.home() reads USERPROFILE on Windows and only falls back to HOME
+    # when it is absent. Setting HOME alone leaves the real profile in place,
+    # so the install under test is never the one found.
+    environment["USERPROFILE"] = str(home)
+    environment["HOMEDRIVE"] = os.path.splitdrive(str(home))[0]
+    environment["HOMEPATH"] = os.path.splitdrive(str(home))[1]
     environment["XDG_STATE_HOME"] = str(tmp_path / "state")
     workspace = tmp_path / "workspace"
     workspace.mkdir(exist_ok=True)
