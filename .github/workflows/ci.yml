@@ -13,12 +13,22 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
+        # SKILL.md claims linux, macos and windows. Only ubuntu was ever run,
+        # so the other two were a claim and not a result. Full version sweep on
+        # ubuntu; one version each on macos and windows, enough to catch what
+        # differs between platforms rather than between interpreters.
+        os: [ubuntu-latest]
         python-version: ["3.8", "3.11", "3.13"]
+        include:
+          - os: macos-latest
+            python-version: "3.13"
+          - os: windows-latest
+            python-version: "3.13"
     steps:
       # Actions are pinned to a commit. A tag such as v7 can be moved to other
       # code by whoever controls the action's repository; a commit cannot.
