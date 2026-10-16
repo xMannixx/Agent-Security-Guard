@@ -277,6 +277,7 @@ def _build_context(spec: Dict[str, Any], config) -> GuardContext:
         workspace_root=spec.get("workspace_root"),
         domain_allowlist=spec.get("domain_allowlist", config.domain_allowlist),
         config=config,
+        data_sensitivity_stated=spec.get("data_sensitivity") not in (None, ""),
         **{key: _enum(key, spec.get(key)) for key in _CONTEXT_ENUMS},
         **{flag: spec.get(flag, False) for flag in _CONTEXT_FLAGS},
     )

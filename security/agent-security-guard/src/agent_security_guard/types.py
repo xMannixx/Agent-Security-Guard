@@ -315,6 +315,7 @@ class GuardEvent:
     action_hash: Optional[str] = None
     chain_id: Optional[str] = None
     message: Optional[str] = None
+    tool: Optional[str] = None                  # the tool's name, nothing of its arguments
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -331,6 +332,7 @@ class GuardEvent:
             "action_hash": self.action_hash,
             "chain_id": self.chain_id,
             "message": self.message,
+            "tool": self.tool,
         }
 
 
@@ -357,6 +359,10 @@ class GuardContext:
     mode: str = "autonomous-safe"
     origin_trust: OriginTrust = OriginTrust.UNKNOWN
     data_sensitivity: DataSensitivity = DataSensitivity.PUBLIC
+    # False where the host gave no sensitivity and ``public`` is only the
+    # default. Decisions do not look at it; the audit trail then records
+    # none instead of ``public``, unless the guard found a higher one.
+    data_sensitivity_stated: bool = True
     user_intent_origin: UserIntentOrigin = UserIntentOrigin.UNKNOWN
     current_channel: str = ""
     chain_id: Optional[str] = None

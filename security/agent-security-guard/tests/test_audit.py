@@ -409,3 +409,155 @@ def test_jsonl_file_from_before_chaining_keeps_working(tmp_path):
     assert [row["event_type"] for row in log.last(10)] == ["new", "old"]
     check = log.verify()
     assert (check.ok, check.records, check.unchained) == (True, 1, 1)
+
+
+# --------------------------------------------------------------------------- #
+# The tool's name, and what was not stated
+# --------------------------------------------------------------------------- #
+
+
+def _hash_as_in_0_4_0(previous, record):
+    """How 0.4.0 hashed a record: these thirteen columns, nothing else."""
+    import hashlib
+    columns = [
+        "ts", "event_type", "action_tier", "decision", "reason_code", "source",
+        "channel", "origin_trust", "data_sensitivity", "input_hash", "action_hash",
+        "chain_id", "message",
+    ]
+    body = json.dumps({col: record.get(col) for col in columns},
+                      sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(f"{previous}\n{body}".encode("utf-8")).hexdigest()
+
+
+def _records_as_in_0_4_0(count=2):
+    previous, records = "", []
+    for i in range(count):
+        record = {"ts": f"2026-10-0{i + 1}", "event_type": "tool_call", "decision": "allow",
+                  "reason_code": "ALLOW_DEFAULT", "data_sensitivity": "public"}
+        record["prev_hash"] = previous
+        record["hash"] = previous = _hash_as_in_0_4_0(previous, record)
+        records.append(record)
+    return records
+
+
+def test_event_keeps_the_tools_name_and_nothing_of_its_arguments(tmp_path):
+    action = AgentAction(kind="write_file", target="/home/u/notes.txt",
+                         payload="the secret plan", metadata={"content": "more of it"})
+    log = AuditLog(backend="both", path=str(tmp_path / "a.db"),
+                   jsonl_path=str(tmp_path / "a.jsonl"))
+    log.record(build_event("tool_call", _decision(), action=action))
+    row = log.last(1)[0]
+    log.close()
+    assert row["tool"] == "write_file"
+    written = (tmp_path / "a.jsonl").read_text(encoding="utf-8")
+    assert json.loads(written)["tool"] == "write_file"
+    for text in ("notes.txt", "secret plan", "more of it"):
+        assert text not in json.dumps(row) and text not in written
+
+
+def test_event_without_an_action_or_a_name_has_no_tool():
+    assert build_event("e", _decision()).tool is None
+    assert build_event("e", _decision(), action=AgentAction(kind="")).tool is None
+
+
+def test_database_from_0_4_0_gets_the_tool_column_and_still_verifies(tmp_path):
+    connection = sqlite3.connect(str(tmp_path / "a.db"))
+    connection.execute(
+        "CREATE TABLE events (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, "
+        "event_type TEXT NOT NULL, action_tier TEXT, decision TEXT NOT NULL, "
+        "reason_code TEXT NOT NULL, source TEXT, channel TEXT, origin_trust TEXT, "
+        "data_sensitivity TEXT, input_hash TEXT, action_hash TEXT, chain_id TEXT, "
+        "message TEXT, prev_hash TEXT, hash TEXT)"
+    )
+    for record in _records_as_in_0_4_0():
+        connection.execute(
+            f"INSERT INTO events ({', '.join(record)}) VALUES ({', '.join('?' for _ in record)})",
+            list(record.values()),
+        )
+    connection.commit()
+    connection.close()
+
+    log = AuditLog(backend="sqlite", path=str(tmp_path / "a.db"))
+    assert log.verify().ok is True
+    log.record(build_event("new", _decision(), action=AgentAction(kind="terminal")))
+    rows = log.last(10)
+    check = log.verify()
+    log.close()
+    assert [row["tool"] for row in rows] == ["terminal", None, None]
+    assert (check.ok, check.records, check.unchained) == (True, 3, 0)
+
+
+def test_jsonl_file_from_0_4_0_still_verifies_with_new_records(tmp_path):
+    path = tmp_path / "a.jsonl"
+    path.write_text("".join(json.dumps(r) + "\n" for r in _records_as_in_0_4_0()), encoding="utf-8")
+    log = AuditLog(backend="jsonl", jsonl_path=str(path))
+    log.record(build_event("new", _decision(), action=AgentAction(kind="terminal")))
+    check = log.verify()
+    assert (check.ok, check.records) == (True, 3)
+    assert log.last(1)[0]["tool"] == "terminal"
+
+
+def _filled_with_tools(tmp_path, backend="sqlite"):
+    log = AuditLog(backend=backend, path=str(tmp_path / "a.db"),
+                   jsonl_path=str(tmp_path / "a.jsonl"))
+    log.record(build_event("e0", _decision()))
+    for i in range(1, 4):
+        log.record(build_event(f"e{i}", _decision(), action=AgentAction(kind="terminal")))
+    log.close()
+
+
+@pytest.mark.parametrize("statement", [
+    "UPDATE events SET tool = 'read_file' WHERE id = 3",   # changed
+    "UPDATE events SET tool = NULL WHERE id = 3",          # removed
+    "UPDATE events SET tool = '' WHERE id = 3",            # emptied
+    "UPDATE events SET tool = 'terminal' WHERE id = 1",    # put in afterwards
+])
+def test_changed_tool_in_the_database_does_not_verify(tmp_path, statement):
+    _filled_with_tools(tmp_path)
+    _sql(tmp_path, statement)
+    log = AuditLog(backend="sqlite", path=str(tmp_path / "a.db"))
+    check = log.verify()
+    log.close()
+    assert check.ok is False
+    assert "changed" in check.problem
+
+
+@pytest.mark.parametrize("change", [
+    lambda record: record.update(tool="read_file"),
+    lambda record: record.pop("tool"),
+    lambda record: record.update(tool=None),
+])
+def test_changed_tool_in_the_jsonl_file_does_not_verify(tmp_path, change):
+    _filled_with_tools(tmp_path, "jsonl")
+
+    def edit(lines):
+        record = json.loads(lines[2])
+        change(record)
+        return lines[:2] + [json.dumps(record)] + lines[3:]
+
+    _rewrite_lines(tmp_path, edit)
+    log = AuditLog(backend="jsonl", jsonl_path=str(tmp_path / "a.jsonl"))
+    assert log.verify().ok is False
+
+
+def test_unstated_sensitivity_is_recorded_as_none_not_public():
+    event = build_event("e", _decision(), context=GuardContext(data_sensitivity_stated=False))
+    assert event.data_sensitivity is None
+
+
+def test_stated_public_is_recorded_as_public():
+    assert build_event("e", _decision(), context=GuardContext()).data_sensitivity == "public"
+
+
+def test_sensitivity_the_guard_found_is_recorded_though_none_was_stated():
+    from agent_security_guard import DataSensitivity
+    context = GuardContext(data_sensitivity=DataSensitivity.SENSITIVE,
+                           data_sensitivity_stated=False)
+    assert build_event("e", _decision(), context=context).data_sensitivity == "sensitive"
+
+
+def test_empty_channel_is_recorded_as_none():
+    event = build_event("e", _decision(), context=GuardContext(current_channel=""))
+    assert (event.source, event.channel) == (None, None)
+    event = build_event("e", _decision(), context=GuardContext(current_channel="telegram"))
+    assert (event.source, event.channel) == ("telegram", "telegram")

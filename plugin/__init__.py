@@ -880,6 +880,7 @@ def _with_positional(positional: tuple, kwargs: Dict[str, Any]) -> Dict[str, Any
 def _extract_context(kwargs: Dict[str, Any], adapter) -> GuardContext:
     config = adapter.config
     no_write, short_conf = _scope_flags(kwargs, config)
+    sensitivity = _enum(DataSensitivity, kwargs.get("data_sensitivity"), None)
     return GuardContext(
         mode=adapter.mode,
         # A host that states no provenance gets UNSPECIFIED, not UNKNOWN.
@@ -888,7 +889,10 @@ def _extract_context(kwargs: Dict[str, Any], adapter) -> GuardContext:
         origin_trust=_enum(
             OriginTrust, kwargs.get("origin_trust"), OriginTrust.UNSPECIFIED
         ),
-        data_sensitivity=_enum(DataSensitivity, kwargs.get("data_sensitivity"), DataSensitivity.PUBLIC),
+        # Hermes passes none. Decisions take PUBLIC then, the audit trail
+        # records that nothing was stated.
+        data_sensitivity=DataSensitivity.PUBLIC if sensitivity is None else sensitivity,
+        data_sensitivity_stated=sensitivity is not None,
         user_intent_origin=_enum(UserIntentOrigin, kwargs.get("user_intent_origin"), UserIntentOrigin.UNKNOWN),
         current_channel=kwargs.get("channel", ""),
         # Hermes sends no chain_id but a turn_id: one user turn is one chain.
