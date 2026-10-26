@@ -7,6 +7,12 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "ci"
+    # codeql-action/init and /analyze must run the same version, or the
+    # analyze step fails. Bump them in one pull request.
+    groups:
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
   # The package itself is stdlib-only, so there is nothing for the "pip"
   # updater to do. It is deliberately not pointed at requirements-ci.txt: that
   # file pins a different pytest for each Python, and the updater raised the
