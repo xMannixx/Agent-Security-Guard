@@ -14,15 +14,15 @@
   <img src="https://img.shields.io/badge/tests-1246%20passing-success.svg" alt="Tests: 1246 passing">
 </p>
 
+<p align="center">
+  <a href="docs/demo/agent-security-guard-demo.mp4"><img src="assets/demo.gif" alt="Demo: a web page tells Hermes to run a command; Agent Security Guard asks first, the command is denied, the user's own request runs free" width="900"></a><br>
+  <sub>A real Hermes session, 50 s. <a href="docs/demo/agent-security-guard-demo.mp4">Video (MP4)</a> · <a href="https://x.com/Perry2096581714/status/2119758994139185266">on X</a></sub>
+</p>
+
 The companion to [`agent-memory`](../Agent%20memory%20skill). The memory skill
 protects long-term truth (what may be remembered). This guard protects the
 dangerous moment **before** an action: context intake, tool call, memory write,
 external action, and chain drift (what untrusted content is allowed to *become*).
-
-**Demo (50 s, a real Hermes session):** a web page tells the agent to run a
-command, the guard asks before it runs, your own requests stay free —
-[watch the video](docs/demo/agent-security-guard-demo.mp4) ·
-[on X](https://x.com/Perry2096581714/status/2119758994139185266).
 
 ---
 
