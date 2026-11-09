@@ -19,6 +19,11 @@ protects long-term truth (what may be remembered). This guard protects the
 dangerous moment **before** an action: context intake, tool call, memory write,
 external action, and chain drift (what untrusted content is allowed to *become*).
 
+**Demo (50 s, a real Hermes session):** a web page tells the agent to run a
+command, the guard asks before it runs, your own requests stay free —
+[watch the video](docs/demo/agent-security-guard-demo.mp4) ·
+[on X](https://x.com/Perry2096581714/status/2119758994139185266).
+
 ---
 
 ## The core principle
