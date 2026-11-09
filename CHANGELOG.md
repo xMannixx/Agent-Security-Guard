@@ -6,6 +6,13 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **A demo** in `docs/demo/`: a 50-second video from a real Hermes session
+  (a page proposes a command, the guard asks first, the command is denied,
+  the user's own request runs free), shown on the README as an animated GIF,
+  and the page it uses.
+
 ## [0.4.2] - 2026-11-09
 
 **The plugin directory works on its own, so Hermes can install it from its

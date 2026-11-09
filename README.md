@@ -11,7 +11,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.8%2B-blue.svg" alt="Python 3.8+"></a>
   <img src="https://img.shields.io/badge/deps-stdlib%20only-success.svg" alt="Dependencies: stdlib only">
-  <img src="https://img.shields.io/badge/tests-1246%20passing-success.svg" alt="Tests: 1246 passing">
+  <img src="https://img.shields.io/badge/tests-1274%20passing-success.svg" alt="Tests: 1274 passing">
 </p>
 
 <p align="center">

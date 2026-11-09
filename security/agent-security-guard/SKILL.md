@@ -126,6 +126,6 @@ confirmation (see `references/self-modification.md`). v0.1.0 delivered the
 policy core, scanner + boundary wrapper, sequence kill-chain detection,
 SQLite/JSONL audit, memory bridge, CLI, and the plugin.
 
-1246 tests pass: the OpenClaw threat-class regressions, the self-improvement
+1274 tests pass: the OpenClaw threat-class regressions, the self-improvement
 end-to-end bar, and `tests/test_availability.py` (the guard must not block the
 host). See `README.md`, `ROADMAP.md`, and `references/`.
