@@ -22,9 +22,13 @@ jobs:
         # so the other two were a claim and not a result. Full version sweep on
         # ubuntu; one version each on macos and windows, enough to catch what
         # differs between platforms rather than between interpreters.
+        # 3.8 runs on ubuntu-22.04: setup-python has no 3.8 for the newer
+        # images ubuntu-latest points to (26.04 since November 2026).
         os: [ubuntu-latest]
-        python-version: ["3.8", "3.11", "3.13"]
+        python-version: ["3.11", "3.13"]
         include:
+          - os: ubuntu-22.04
+            python-version: "3.8"
           - os: macos-latest
             python-version: "3.13"
           - os: windows-latest

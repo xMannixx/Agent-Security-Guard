@@ -96,11 +96,15 @@ def test_the_plugin_directory_alone_runs_its_own_copy(tmp_path):
     shutil.copytree(PLUGIN_DIR, installed, ignore=shutil.ignore_patterns("__pycache__"))
     home = tmp_path / "home"
     home.mkdir()
-    env = {
+    # A home of its own: HOME on POSIX, USERPROFILE on Windows. The rest of
+    # the environment stays (Windows needs e.g. SYSTEMROOT to start Python).
+    env = dict(os.environ)
+    env.update({
         "HOME": str(home),
+        "USERPROFILE": str(home),
         "XDG_STATE_HOME": str(tmp_path / "state"),
-        "PATH": os.environ.get("PATH", ""),
-    }
+    })
+    env.pop("AGENT_SECURITY_GUARD_MODE", None)
     result = subprocess.run(
         [sys.executable, "-I", "-c", _PROBE, str(installed)],
         cwd=tmp_path, env=env, capture_output=True, text=True, timeout=60,
