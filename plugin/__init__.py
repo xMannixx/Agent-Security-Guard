@@ -63,11 +63,18 @@ _SYSTEM_PACKAGE = Path("/usr/local/lib/agent-security-guard/src")
 
 
 def _package_locations() -> List[Path]:
-    """Where a copy of the package may be, in the order they are tried."""
+    """Where a copy of the package may be, in the order they are tried.
+
+    The last one is the copy shipped inside the plugin directory
+    (``scripts/bundle_engine.py``). A catalog install checks out only this
+    directory, so that copy is what it runs; an operator's root-owned install
+    or a repository checkout still comes first.
+    """
     return [
         _SYSTEM_PACKAGE,
         _PLUGIN_DIR.parent / "security" / "agent-security-guard" / "src",
         Path.home() / ".hermes" / "agent-security-guard" / "src",
+        _PLUGIN_DIR,
     ]
 
 
@@ -125,7 +132,13 @@ def _find_package() -> None:
     """
     if _PACKAGE in sys.modules:  # the host imported it itself
         return
-    for location in _package_locations():
+    *installed, bundled = _package_locations()
+    present = [loc for loc in installed if (loc / _PACKAGE / "__init__.py").is_file()]
+    # The copy inside the plugin directory is for an install that has no
+    # other one (the catalog's). Where an installed copy exists but is
+    # refused or broken, the guard does not quietly switch to another
+    # version: it reports it and runs on the degraded rules, as before.
+    for location in present or [bundled]:
         if not (location / _PACKAGE / "__init__.py").is_file():
             continue
         try:

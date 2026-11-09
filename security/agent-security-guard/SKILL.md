@@ -1,7 +1,7 @@
 ---
 name: agent-security-guard
 description: "Runtime interaction guard for Hermes/OpenClaw: a deterministic transition policy engine that keeps reading, browsing, and summarizing free while stripping command-authority from untrusted content. Separates origin trust from data sensitivity, classifies actions into tiers, blocks dangerous kill-chains (read secret -> external post, web -> shell, download -> execute, untrusted -> privileged memory), wraps untrusted content as data (not instructions), and emits machine-readable decisions with audit. Default mode: autonomous-safe."
-version: 0.4.1
+version: 0.4.2
 author: xMannixx
 license: MIT
 platforms: [linux, macos, windows]
@@ -93,6 +93,9 @@ asks for confirmation (`UNTRUSTED_CONTENT_IN_CONTEXT`). Reads stay free. In Herm
 one chain. `tiers.after_untrusted_content` tunes it.
 
 ## Status
+
+v0.4.2 makes the plugin directory self-contained, so Hermes can install it
+from its plugin catalog. Decisions are unchanged.
 
 v0.4.1 records the tool's name in the audit trail (the name only) and leaves
 `data_sensitivity`, `source` and `channel` empty where nothing was stated.
