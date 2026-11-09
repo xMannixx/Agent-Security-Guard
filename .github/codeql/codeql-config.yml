@@ -1,0 +1,6 @@
+# plugin/agent_security_guard is a generated copy of
+# security/agent-security-guard/src/agent_security_guard (scripts/bundle_engine.py;
+# tests/test_plugin_bundle.py fails when the two differ). The source is
+# analysed; analysing the copy would only report every finding twice.
+paths-ignore:
+  - plugin/agent_security_guard
