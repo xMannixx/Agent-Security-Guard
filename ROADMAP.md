@@ -92,6 +92,11 @@ Read against the live trail: it now names the tool each decision was about,
 and leaves `data_sensitivity`, `source` and `channel` empty where nothing was
 stated. The guard's own files are recognized on Windows.
 
+## 0.4.2 — Installable from the Hermes catalog (done)
+
+The plugin directory carries its own copy of the engine, so an install that
+checks out only `plugin/` runs the full policy, not the degraded fallback.
+
 ## Next
 
 - **Shell commands.** What an agent reads, sends or rewrites through a shell

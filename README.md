@@ -355,6 +355,10 @@ No runtime dependencies — pure stdlib. `pytest` only for development.
 
 ## Status & roadmap
 
+v0.4.2 — installable from the Hermes plugin catalog: the plugin directory
+carries its own copy of the engine and declares its hooks and the Hermes it
+needs. Decisions are unchanged.
+
 v0.4.1 — the audit trail names the tool each decision was about (the name
 only), and leaves `data_sensitivity`, `source` and `channel` empty where
 nothing was stated instead of writing `public` and `''`. Records from 0.4.0
