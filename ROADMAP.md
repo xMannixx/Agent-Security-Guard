@@ -126,9 +126,10 @@ model that does whatever the injected text says. Milestone:
 | 7 | **Benchmark with a real model:** attack success with and without the guard in a real Hermes session. | not measured | `benchmarks/live/` | [#45](https://github.com/xMannixx/Agent-Security-Guard/issues/45) |
 | 8 | **Fewer questions when research and action meet in one turn**, the design's main cost. Ideas are measured, not decided. | 4 / 4 such tasks asked | fewer, attack numbers unchanged | [#46](https://github.com/xMannixx/Agent-Security-Guard/issues/46) |
 
-Items 1 to 5 together would take the attacks on Hermes's own tools from
-1,728 / 1,920 to all 1,920, from every source the benchmark uses. Each one
-ships only if the everyday tasks stay as they are.
+Items 4 and 5 would take the attacks through web, search, X and browser from
+1,728 / 1,920 to all 1,920. Items 2 and 3 do the same for files, shell output
+and MCP results, and item 1 for third-party tools. Each one ships only if the
+everyday tasks stay as they are.
 
 ## Later
 
