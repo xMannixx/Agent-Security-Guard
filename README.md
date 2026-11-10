@@ -343,7 +343,8 @@ substitutes a degraded-but-safe data block rather than passing raw untrusted
 content through.
 
 Configuration lives in [`guard.yaml`](guard.yaml). The plugin loads the first
-of `/etc/agent-security-guard/guard.yaml`, `~/.hermes/guard.yaml`, and the copy
+of `/etc/agent-security-guard/guard.yaml`, `guard.yaml` in the Hermes home
+(`~/.hermes/`, or the active profile's), and the copy
 shipped next to it. It never loads one from the working directory, which is the
 agent's workspace. As a library, load it with
 `agent_security_guard.load_config(path)` (built-in defaults are used when the
