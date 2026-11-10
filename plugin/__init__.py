@@ -62,6 +62,19 @@ _PLUGIN_DIR = Path(__file__).resolve().parent
 _SYSTEM_PACKAGE = Path("/usr/local/lib/agent-security-guard/src")
 
 
+def _hermes_home() -> Path:
+    """The Hermes home of this process: the active profile's, if Hermes says so.
+
+    ``hermes_constants.get_hermes_home()`` follows ``HERMES_HOME`` and profiles;
+    outside Hermes (tests, the CLI) it is ``~/.hermes``.
+    """
+    try:
+        from hermes_constants import get_hermes_home
+        return Path(get_hermes_home())
+    except Exception:
+        return Path.home() / ".hermes"
+
+
 def _package_locations() -> List[Path]:
     """Where a copy of the package may be, in the order they are tried.
 
@@ -73,7 +86,7 @@ def _package_locations() -> List[Path]:
     return [
         _SYSTEM_PACKAGE,
         _PLUGIN_DIR.parent / "security" / "agent-security-guard" / "src",
-        Path.home() / ".hermes" / "agent-security-guard" / "src",
+        _hermes_home() / "agent-security-guard" / "src",
         _PLUGIN_DIR,
     ]
 
@@ -213,7 +226,7 @@ def _config_path() -> Optional[str]:
     """
     for candidate in (
         _SYSTEM_CONFIG,
-        Path.home() / ".hermes" / "guard.yaml",
+        _hermes_home() / "guard.yaml",
         Path(__file__).resolve().parent.parent / "guard.yaml",
     ):
         if candidate.is_file():
@@ -232,8 +245,8 @@ def _warn_if_workspace_config_ignored(chosen: Optional[str]) -> None:
         if stray.is_file() and not (chosen and stray.samefile(chosen)):
             logger.warning(
                 "%s is ignored: the policy is not read from the working "
-                "directory. Move it to %s or ~/.hermes/guard.yaml.",
-                stray, _SYSTEM_CONFIG,
+                "directory. Move it to %s or %s.",
+                stray, _SYSTEM_CONFIG, _hermes_home() / "guard.yaml",
             )
     except OSError:
         pass
@@ -976,6 +989,14 @@ def _remember_turn_scope(kwargs: Dict[str, Any]) -> None:
     if GuardAdapter is None or not isinstance(session, str) or not session:
         return
     if not isinstance(message, str):
+        return
+    # Only the opt-in scope_from_text check reads these flags: without it,
+    # the message is not scanned at all.
+    opt_in = kwargs.get("scope_from_text")
+    if opt_in is None:
+        adapter = _get_adapter()
+        opt_in = adapter is not None and bool(getattr(adapter.config, "scope_from_text", False))
+    if not opt_in:
         return
     flags = (detect_no_write_scope(message), is_short_confirmation(message))
     with _turn_scopes_lock:

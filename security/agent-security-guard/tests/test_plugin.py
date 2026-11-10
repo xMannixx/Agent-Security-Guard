@@ -1,6 +1,7 @@
 """Dummy Hermes/OpenClaw host exercising the plugin hooks."""
 
 import json
+import sys
 from pathlib import Path
 
 import plugin as guard_plugin
@@ -429,9 +430,14 @@ def test_model_written_chain_id_cannot_leave_the_chain(isolated_plugin):
 
 
 def test_scope_from_text_uses_the_message_given_to_pre_llm_call(isolated_plugin):
-    # Hermes hands the user's message to pre_llm_call only.
+    # Hermes hands the user's message to pre_llm_call only. Without the opt-in
+    # the message is not scanned there at all.
     assert isolated_plugin.wrap_untrusted_context(
-        session_id="s1", user_message="Nichts ändern. Nur Vorschlag."
+        session_id="s0", user_message="Nichts ändern. Nur Vorschlag."
+    ) is None
+    assert "s0" not in isolated_plugin._turn_scopes
+    assert isolated_plugin.wrap_untrusted_context(
+        session_id="s1", user_message="Nichts ändern. Nur Vorschlag.", scope_from_text=True
     ) is None
 
     def write(session, **extra):
@@ -574,3 +580,17 @@ def test_misspelled_sensitivity_counts_as_not_stated(monkeypatch, tmp_path):
     row = audit.last(1)[0]
     audit.close()
     assert row["data_sensitivity"] is None
+
+
+def test_the_hermes_home_follows_the_active_profile(isolated_plugin, monkeypatch, tmp_path):
+    import types
+
+    profile = tmp_path / "profiles" / "work"
+    fake = types.ModuleType("hermes_constants")
+    fake.get_hermes_home = lambda: profile
+    monkeypatch.setitem(sys.modules, "hermes_constants", fake)
+    assert isolated_plugin._hermes_home() == profile
+    assert profile / "agent-security-guard" / "src" in isolated_plugin._package_locations()
+
+    monkeypatch.setitem(sys.modules, "hermes_constants", None)  # outside Hermes
+    assert isolated_plugin._hermes_home() == Path.home() / ".hermes"

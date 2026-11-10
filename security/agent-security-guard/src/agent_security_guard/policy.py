@@ -750,9 +750,11 @@ def _decide_execution(action: AgentAction, context: GuardContext) -> GuardDecisi
 
 
 # Paths named by a patch body: the V4A headers used by apply_patch-style tools
-# and the "+++ b/path" line of a unified diff.
+# and the "+++ b/path" line of a unified diff. The path runs to the last
+# non-space of the line; `\S.*?\s*$` said the same but backtracked badly on a
+# long run of spaces. `\r` is stripped too, for patches with CRLF line ends.
 _PATCH_PATH = re.compile(
-    r"^(?:\*\*\* (?:Add|Update|Delete) File: |\*\*\* Move to: |\+\+\+ (?:b/)?)(\S.*?)\s*$",
+    r"^(?:\*\*\* (?:Add|Update|Delete) File: |\*\*\* Move to: |\+\+\+ (?:b/)?)(\S(?:[^\n]*\S)?)[ \t\r]*$",
     re.MULTILINE,
 )
 
