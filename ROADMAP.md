@@ -108,14 +108,29 @@ A benchmark of what the guard stops and what it costs (`benchmarks/`). It
 found three Hermes tools the guard did not know: a scheduled job, a subagent
 and desktop control now count as execution.
 
-## Next
+## Next: close the gaps the benchmark measured
 
-- **Third-party tools after outside content.** InjecAgent's bank, smart-lock
-  and similar MCP tools stay free after a web page (561 / 1,054 stopped). An
-  opt-in rule that asks about unrecognized tools after outside content would
-  stop all of them; how often it would ask is the open question.
-- **Browser actions** (`browser_exec` filling forms and clicking) are not told
-  apart from browsing.
+Each item has a number from [`benchmarks/`](benchmarks/) to beat, and an
+issue on GitHub. The numbers are for the policy as shipped (0.4.4), with a
+model that does whatever the injected text says. Milestone:
+[0.5.0](https://github.com/xMannixx/Agent-Security-Guard/milestone/1).
+
+| # | Gap | Today | Target | Issue |
+|---|---|---|---|---|
+| 1 | **Write-capable third-party (MCP) tools after outside content.** Use the MCP `readOnlyHint` Hermes already records: write-capable tools are asked about, read-only ones stay free. | InjecAgent via web page 561 / 1,054 | ≥ 1,000 / 1,054, everyday tasks unchanged | [#39](https://github.com/xMannixx/Agent-Security-Guard/issues/39) |
+| 2 | **MCP tool results as outside content**, for servers Hermes marks `trust: untrusted` or tools with `openWorldHint`. | MCP mail source 96 / 480 | ≥ 432 / 480 | [#40](https://github.com/xMannixx/Agent-Security-Guard/issues/40) |
+| 3 | **Files and shell output from outside:** the output of `curl`, `wget` or `git clone`, and an operator list of paths such as `~/Downloads/**`. | 96 / 480 each | ≥ 432 / 480 each | [#41](https://github.com/xMannixx/Agent-Security-Guard/issues/41) |
+| 4 | **Browser actions:** `browser_exec` filling or clicking after outside content is asked about; navigating and reading stay free. | 0 / 96 | 96 / 96 | [#42](https://github.com/xMannixx/Agent-Security-Guard/issues/42) |
+| 5 | **Input to a running process:** `process_manage` classified by its `action` (`write` / `submit` is execution, `poll` / `log` is a read). | 0 / 96 | 96 / 96 | [#43](https://github.com/xMannixx/Agent-Security-Guard/issues/43) |
+| 6 | **A known secret in a chat message** (optional): `send_message` stays free, but not with a recognized secret in it. | 0 / 96 | setting, both states measured | [#44](https://github.com/xMannixx/Agent-Security-Guard/issues/44) |
+| 7 | **Benchmark with a real model:** attack success with and without the guard in a real Hermes session. | not measured | `benchmarks/live/` | [#45](https://github.com/xMannixx/Agent-Security-Guard/issues/45) |
+| 8 | **Fewer questions when research and action meet in one turn**, the design's main cost. Ideas are measured, not decided. | 4 / 4 such tasks asked | fewer, attack numbers unchanged | [#46](https://github.com/xMannixx/Agent-Security-Guard/issues/46) |
+
+Items 1 to 5 together would take the attacks on Hermes's own tools from
+1,728 / 1,920 to all 1,920, from every source the benchmark uses. Each one
+ships only if the everyday tasks stay as they are.
+
+## Later
 
 - **Shell commands.** What an agent reads, sends or rewrites through a shell
   is not seen: `cat .env`, `curl`, replacing the guard's files. The guard sits

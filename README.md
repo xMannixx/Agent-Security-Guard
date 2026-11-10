@@ -24,7 +24,8 @@ stopped (90 %), whatever their wording; text filtering on the same pages
 recognizes 16.7 %. 0 of 24 everyday tasks interrupted, 0.1 ms per call.
 Also run against the 1,054 public cases of
 [InjecAgent](https://github.com/uiuc-kang-lab/InjecAgent) (Zhan et al., UIUC,
-ACL 2024). What it does not stop is measured and listed too.
+ACL 2024). What it does not stop is measured and listed too, and each gap
+has a target in the [roadmap](ROADMAP.md).
 
 The companion to [`agent-memory`](../Agent%20memory%20skill). The memory skill
 protects long-term truth (what may be remembered). This guard protects the
