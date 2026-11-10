@@ -135,7 +135,7 @@ tiers:
 # Example:
 #   tool_tiers:
 #     codebase_search: read_only
-#     cronjob_manage: config_change
+#     my_scheduler: config_change
 #     my_deploy_tool: execution
 #
 # Tools that write the agent's memory are recognized by name (`memory`,

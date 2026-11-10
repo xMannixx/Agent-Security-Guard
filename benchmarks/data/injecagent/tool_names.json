@@ -1,0 +1,1322 @@
+{
+ "AmazonAddToCart": {
+  "tool": "AddToCart",
+  "toolkit": "Amazon"
+ },
+ "AmazonGetProductDetails": {
+  "tool": "GetProductDetails",
+  "toolkit": "Amazon"
+ },
+ "AmazonManageWishlist": {
+  "tool": "ManageWishlist",
+  "toolkit": "Amazon"
+ },
+ "AmazonPlaceOrder": {
+  "tool": "PlaceOrder",
+  "toolkit": "Amazon"
+ },
+ "AmazonPostReview": {
+  "tool": "PostReview",
+  "toolkit": "Amazon"
+ },
+ "AmazonRemoveFromCart": {
+  "tool": "RemoveFromCart",
+  "toolkit": "Amazon"
+ },
+ "AmazonSearchOrderHistory": {
+  "tool": "SearchOrderHistory",
+  "toolkit": "Amazon"
+ },
+ "AmazonSearchProducts": {
+  "tool": "SearchProducts",
+  "toolkit": "Amazon"
+ },
+ "AmazonViewCart": {
+  "tool": "ViewCart",
+  "toolkit": "Amazon"
+ },
+ "AmazonViewOrderDetails": {
+  "tool": "ViewOrderDetails",
+  "toolkit": "Amazon"
+ },
+ "AmazonViewSavedAddresses": {
+  "tool": "ViewSavedAddresses",
+  "toolkit": "Amazon"
+ },
+ "AmazonViewSavedPaymentMethods": {
+  "tool": "ViewSavedPaymentMethods",
+  "toolkit": "Amazon"
+ },
+ "AugustSmartLockAddGuest": {
+  "tool": "AddGuest",
+  "toolkit": "AugustSmartLock"
+ },
+ "AugustSmartLockCheckLockStatus": {
+  "tool": "CheckLockStatus",
+  "toolkit": "AugustSmartLock"
+ },
+ "AugustSmartLockDeleteGuest": {
+  "tool": "DeleteGuest",
+  "toolkit": "AugustSmartLock"
+ },
+ "AugustSmartLockGenerateTemporaryAccessCode": {
+  "tool": "GenerateTemporaryAccessCode",
+  "toolkit": "AugustSmartLock"
+ },
+ "AugustSmartLockGrantGuestAccess": {
+  "tool": "GrantGuestAccess",
+  "toolkit": "AugustSmartLock"
+ },
+ "AugustSmartLockLockDoor": {
+  "tool": "LockDoor",
+  "toolkit": "AugustSmartLock"
+ },
+ "AugustSmartLockRevokeGuestAccess": {
+  "tool": "RevokeGuestAccess",
+  "toolkit": "AugustSmartLock"
+ },
+ "AugustSmartLockRevokeTemporaryAccessCode": {
+  "tool": "RevokeTemporaryAccessCode",
+  "toolkit": "AugustSmartLock"
+ },
+ "AugustSmartLockSearchGuests": {
+  "tool": "SearchGuests",
+  "toolkit": "AugustSmartLock"
+ },
+ "AugustSmartLockUnlockDoor": {
+  "tool": "UnlockDoor",
+  "toolkit": "AugustSmartLock"
+ },
+ "AugustSmartLockViewAccessHistory": {
+  "tool": "ViewAccessHistory",
+  "toolkit": "AugustSmartLock"
+ },
+ "BankManagerGetAccountInformation": {
+  "tool": "GetAccountInformation",
+  "toolkit": "BankManager"
+ },
+ "BankManagerGetAccountStatement": {
+  "tool": "GetAccountStatement",
+  "toolkit": "BankManager"
+ },
+ "BankManagerPayBill": {
+  "tool": "PayBill",
+  "toolkit": "BankManager"
+ },
+ "BankManagerSearchPayee": {
+  "tool": "SearchPayee",
+  "toolkit": "BankManager"
+ },
+ "BankManagerSearchTransactions": {
+  "tool": "SearchTransactions",
+  "toolkit": "BankManager"
+ },
+ "BankManagerTransferFunds": {
+  "tool": "TransferFunds",
+  "toolkit": "BankManager"
+ },
+ "BinanceCancelOrder": {
+  "tool": "CancelOrder",
+  "toolkit": "Binance"
+ },
+ "BinanceDeposit": {
+  "tool": "Deposit",
+  "toolkit": "Binance"
+ },
+ "BinanceGetAccountBalances": {
+  "tool": "GetAccountBalances",
+  "toolkit": "Binance"
+ },
+ "BinanceGetOrderHistory": {
+  "tool": "GetOrderHistory",
+  "toolkit": "Binance"
+ },
+ "BinanceGetRealTimePrice": {
+  "tool": "GetRealTimePrice",
+  "toolkit": "Binance"
+ },
+ "BinanceGetTradeHistory": {
+  "tool": "GetTradeHistory",
+  "toolkit": "Binance"
+ },
+ "BinanceModifyOrder": {
+  "tool": "ModifyOrder",
+  "toolkit": "Binance"
+ },
+ "BinancePlaceOrder": {
+  "tool": "PlaceOrder",
+  "toolkit": "Binance"
+ },
+ "BinanceRetrieveAccounts": {
+  "tool": "RetrieveAccounts",
+  "toolkit": "Binance"
+ },
+ "BinanceWithdraw": {
+  "tool": "Withdraw",
+  "toolkit": "Binance"
+ },
+ "CiscoUmbrellaBlockDomain": {
+  "tool": "BlockDomain",
+  "toolkit": "CiscoUmbrella"
+ },
+ "CiscoUmbrellaCreatePolicy": {
+  "tool": "CreatePolicy",
+  "toolkit": "CiscoUmbrella"
+ },
+ "CiscoUmbrellaDeletePolicy": {
+  "tool": "DeletePolicy",
+  "toolkit": "CiscoUmbrella"
+ },
+ "CiscoUmbrellaGenerateReport": {
+  "tool": "GenerateReport",
+  "toolkit": "CiscoUmbrella"
+ },
+ "CiscoUmbrellaGetLogDetails": {
+  "tool": "GetLogDetails",
+  "toolkit": "CiscoUmbrella"
+ },
+ "CiscoUmbrellaGetPolicyDetails": {
+  "tool": "GetPolicyDetails",
+  "toolkit": "CiscoUmbrella"
+ },
+ "CiscoUmbrellaGetThreatDetails": {
+  "tool": "GetThreatDetails",
+  "toolkit": "CiscoUmbrella"
+ },
+ "CiscoUmbrellaSearchLogs": {
+  "tool": "SearchLogs",
+  "toolkit": "CiscoUmbrella"
+ },
+ "CiscoUmbrellaSearchPolicy": {
+  "tool": "SearchPolicy",
+  "toolkit": "CiscoUmbrella"
+ },
+ "CiscoUmbrellaSearchThreats": {
+  "tool": "SearchThreats",
+  "toolkit": "CiscoUmbrella"
+ },
+ "CiscoUmbrellaUnblockDomain": {
+  "tool": "UnblockDomain",
+  "toolkit": "CiscoUmbrella"
+ },
+ "CiscoUmbrellaUpdatePolicy": {
+  "tool": "UpdatePolicy",
+  "toolkit": "CiscoUmbrella"
+ },
+ "CiscoUmbrellaVerifyDomain": {
+  "tool": "VerifyDomain",
+  "toolkit": "CiscoUmbrella"
+ },
+ "DeepfakeGeneratorGenerateAudioDeepfake": {
+  "tool": "GenerateAudioDeepfake",
+  "toolkit": "DeepfakeGenerator"
+ },
+ "DeepfakeGeneratorGenerateVideoDeepfake": {
+  "tool": "GenerateVideoDeepfake",
+  "toolkit": "DeepfakeGenerator"
+ },
+ "DeepfakeGeneratorManipulateAudioDeepfake": {
+  "tool": "ManipulateAudioDeepfake",
+  "toolkit": "DeepfakeGenerator"
+ },
+ "DeepfakeGeneratorManipulateVideoDeepfake": {
+  "tool": "ManipulateVideoDeepfake",
+  "toolkit": "DeepfakeGenerator"
+ },
+ "DeepfakeGeneratorVerifyDeepfake": {
+  "tool": "VerifyDeepfake",
+  "toolkit": "DeepfakeGenerator"
+ },
+ "DropboxCreateFolder": {
+  "tool": "CreateFolder",
+  "toolkit": "Dropbox"
+ },
+ "DropboxCreateLink": {
+  "tool": "CreateLink",
+  "toolkit": "Dropbox"
+ },
+ "DropboxDeleteItem": {
+  "tool": "DeleteItem",
+  "toolkit": "Dropbox"
+ },
+ "DropboxDisableLink": {
+  "tool": "DisableLink",
+  "toolkit": "Dropbox"
+ },
+ "DropboxDownloadFile": {
+  "tool": "DownloadFile",
+  "toolkit": "Dropbox"
+ },
+ "DropboxGetItemMetadata": {
+  "tool": "GetItemMetadata",
+  "toolkit": "Dropbox"
+ },
+ "DropboxListFilesAndFolders": {
+  "tool": "ListFilesAndFolders",
+  "toolkit": "Dropbox"
+ },
+ "DropboxMoveItem": {
+  "tool": "MoveItem",
+  "toolkit": "Dropbox"
+ },
+ "DropboxSearchItems": {
+  "tool": "SearchItems",
+  "toolkit": "Dropbox"
+ },
+ "DropboxShareItem": {
+  "tool": "ShareItem",
+  "toolkit": "Dropbox"
+ },
+ "DropboxUploadFile": {
+  "tool": "UploadFile",
+  "toolkit": "Dropbox"
+ },
+ "EmergencyDispatchSystemCreateDispatchRequest": {
+  "tool": "CreateDispatchRequest",
+  "toolkit": "EmergencyDispatchSystem"
+ },
+ "EmergencyDispatchSystemEditIncident": {
+  "tool": "EditIncident",
+  "toolkit": "EmergencyDispatchSystem"
+ },
+ "EmergencyDispatchSystemEstimateDispatchTime": {
+  "tool": "EstimateDispatchTime",
+  "toolkit": "EmergencyDispatchSystem"
+ },
+ "EmergencyDispatchSystemFindNearbyResources": {
+  "tool": "FindNearbyResources",
+  "toolkit": "EmergencyDispatchSystem"
+ },
+ "EmergencyDispatchSystemGetIncidentData": {
+  "tool": "GetIncidentData",
+  "toolkit": "EmergencyDispatchSystem"
+ },
+ "EmergencyDispatchSystemGetResourceData": {
+  "tool": "GetResourceData",
+  "toolkit": "EmergencyDispatchSystem"
+ },
+ "EmergencyDispatchSystemRedirectDispatchResources": {
+  "tool": "RedirectDispatchResources",
+  "toolkit": "EmergencyDispatchSystem"
+ },
+ "EmergencyDispatchSystemSearchIncidents": {
+  "tool": "SearchIncidents",
+  "toolkit": "EmergencyDispatchSystem"
+ },
+ "EpicFHIRDownloadFiles": {
+  "tool": "DownloadFiles",
+  "toolkit": "EpicFHIR"
+ },
+ "EpicFHIRGetPatientDetails": {
+  "tool": "GetPatientDetails",
+  "toolkit": "EpicFHIR"
+ },
+ "EpicFHIRManageAppointments": {
+  "tool": "ManageAppointments",
+  "toolkit": "EpicFHIR"
+ },
+ "EpicFHIRManageClinicalDocuments": {
+  "tool": "ManageClinicalDocuments",
+  "toolkit": "EpicFHIR"
+ },
+ "EpicFHIRManageDiagnosticReports": {
+  "tool": "ManageDiagnosticReports",
+  "toolkit": "EpicFHIR"
+ },
+ "EpicFHIRManagePatientRecords": {
+  "tool": "ManagePatientRecords",
+  "toolkit": "EpicFHIR"
+ },
+ "EpicFHIRSearchDoctors": {
+  "tool": "SearchDoctors",
+  "toolkit": "EpicFHIR"
+ },
+ "EpicFHIRSearchPatients": {
+  "tool": "SearchPatients",
+  "toolkit": "EpicFHIR"
+ },
+ "EthereumManagerCallSmartContractFunction": {
+  "tool": "CallSmartContractFunction",
+  "toolkit": "EthereumManager"
+ },
+ "EthereumManagerCompileSolidity": {
+  "tool": "CompileSolidity",
+  "toolkit": "EthereumManager"
+ },
+ "EthereumManagerCreateEthereumAccount": {
+  "tool": "CreateEthereumAccount",
+  "toolkit": "EthereumManager"
+ },
+ "EthereumManagerDeploySmartContract": {
+  "tool": "DeploySmartContract",
+  "toolkit": "EthereumManager"
+ },
+ "EthereumManagerEstimateGasCost": {
+  "tool": "EstimateGasCost",
+  "toolkit": "EthereumManager"
+ },
+ "EthereumManagerImportEthereumAccount": {
+  "tool": "ImportEthereumAccount",
+  "toolkit": "EthereumManager"
+ },
+ "EthereumManagerQueryEthereumData": {
+  "tool": "QueryEthereumData",
+  "toolkit": "EthereumManager"
+ },
+ "EthereumManagerSignMessage": {
+  "tool": "SignMessage",
+  "toolkit": "EthereumManager"
+ },
+ "EthereumManagerTransferEther": {
+  "tool": "TransferEther",
+  "toolkit": "EthereumManager"
+ },
+ "EthereumManagerVerifyMessage": {
+  "tool": "VerifyMessage",
+  "toolkit": "EthereumManager"
+ },
+ "EvernoteManagerCreateNote": {
+  "tool": "CreateNote",
+  "toolkit": "EvernoteManager"
+ },
+ "EvernoteManagerCreateNotebook": {
+  "tool": "CreateNotebook",
+  "toolkit": "EvernoteManager"
+ },
+ "EvernoteManagerDeleteNote": {
+  "tool": "DeleteNote",
+  "toolkit": "EvernoteManager"
+ },
+ "EvernoteManagerDeleteNotebook": {
+  "tool": "DeleteNotebook",
+  "toolkit": "EvernoteManager"
+ },
+ "EvernoteManagerManageNoteSharingLevel": {
+  "tool": "ManageNoteSharingLevel",
+  "toolkit": "EvernoteManager"
+ },
+ "EvernoteManagerReadNote": {
+  "tool": "ReadNote",
+  "toolkit": "EvernoteManager"
+ },
+ "EvernoteManagerReadNotebook": {
+  "tool": "ReadNotebook",
+  "toolkit": "EvernoteManager"
+ },
+ "EvernoteManagerSearchNotebooks": {
+  "tool": "SearchNotebooks",
+  "toolkit": "EvernoteManager"
+ },
+ "EvernoteManagerSearchNotes": {
+  "tool": "SearchNotes",
+  "toolkit": "EvernoteManager"
+ },
+ "EvernoteManagerUpdateNote": {
+  "tool": "UpdateNote",
+  "toolkit": "EvernoteManager"
+ },
+ "EvernoteManagerUpdateNotebook": {
+  "tool": "UpdateNotebook",
+  "toolkit": "EvernoteManager"
+ },
+ "ExpediaBooking": {
+  "tool": "Booking",
+  "toolkit": "Expedia"
+ },
+ "ExpediaCancelReservations": {
+  "tool": "CancelReservations",
+  "toolkit": "Expedia"
+ },
+ "ExpediaGetFlightDetails": {
+  "tool": "GetFlightDetails",
+  "toolkit": "Expedia"
+ },
+ "ExpediaRetrieveSavedInformation": {
+  "tool": "RetrieveSavedInformation",
+  "toolkit": "Expedia"
+ },
+ "ExpediaSearchAccommodations": {
+  "tool": "SearchAccommodations",
+  "toolkit": "Expedia"
+ },
+ "ExpediaSearchFlights": {
+  "tool": "SearchFlights",
+  "toolkit": "Expedia"
+ },
+ "ExpediaSearchReservations": {
+  "tool": "SearchReservations",
+  "toolkit": "Expedia"
+ },
+ "FacebookManagerCreateComment": {
+  "tool": "CreateComment",
+  "toolkit": "FacebookManager"
+ },
+ "FacebookManagerCreatePost": {
+  "tool": "CreatePost",
+  "toolkit": "FacebookManager"
+ },
+ "FacebookManagerDeletePost": {
+  "tool": "DeletePost",
+  "toolkit": "FacebookManager"
+ },
+ "FacebookManagerGetMessages": {
+  "tool": "GetMessages",
+  "toolkit": "FacebookManager"
+ },
+ "FacebookManagerGetPost": {
+  "tool": "GetPost",
+  "toolkit": "FacebookManager"
+ },
+ "FacebookManagerGetUserProfile": {
+  "tool": "GetUserProfile",
+  "toolkit": "FacebookManager"
+ },
+ "FacebookManagerSearchFriends": {
+  "tool": "SearchFriends",
+  "toolkit": "FacebookManager"
+ },
+ "FacebookManagerSearchPosts": {
+  "tool": "SearchPosts",
+  "toolkit": "FacebookManager"
+ },
+ "FacebookManagerSendMessage": {
+  "tool": "SendMessage",
+  "toolkit": "FacebookManager"
+ },
+ "FacebookManagerUpdatePost": {
+  "tool": "UpdatePost",
+  "toolkit": "FacebookManager"
+ },
+ "FacebookManagerUpdateUserProfile": {
+  "tool": "UpdateUserProfile",
+  "toolkit": "FacebookManager"
+ },
+ "FedExShipManagerCreateShipmentLabel": {
+  "tool": "CreateShipmentLabel",
+  "toolkit": "FedExShipManager"
+ },
+ "FedExShipManagerGetQuote": {
+  "tool": "GetQuote",
+  "toolkit": "FedExShipManager"
+ },
+ "FedExShipManagerGetShipmentDetails": {
+  "tool": "GetShipmentDetails",
+  "toolkit": "FedExShipManager"
+ },
+ "FedExShipManagerManageShipment": {
+  "tool": "ManageShipment",
+  "toolkit": "FedExShipManager"
+ },
+ "FedExShipManagerSearchSavedAddresses": {
+  "tool": "SearchSavedAddresses",
+  "toolkit": "FedExShipManager"
+ },
+ "FedExShipManagerSearchShipment": {
+  "tool": "SearchShipment",
+  "toolkit": "FedExShipManager"
+ },
+ "GitHubCreateRepository": {
+  "tool": "CreateRepository",
+  "toolkit": "GitHub"
+ },
+ "GitHubDeleteRepository": {
+  "tool": "DeleteRepository",
+  "toolkit": "GitHub"
+ },
+ "GitHubGetRepositoryDetails": {
+  "tool": "GetRepositoryDetails",
+  "toolkit": "GitHub"
+ },
+ "GitHubGetUserDetails": {
+  "tool": "GetUserDetails",
+  "toolkit": "GitHub"
+ },
+ "GitHubManageCollaborator": {
+  "tool": "ManageCollaborator",
+  "toolkit": "GitHub"
+ },
+ "GitHubPostIssue": {
+  "tool": "PostIssue",
+  "toolkit": "GitHub"
+ },
+ "GitHubReadIssue": {
+  "tool": "ReadIssue",
+  "toolkit": "GitHub"
+ },
+ "GitHubSearchIssues": {
+  "tool": "SearchIssues",
+  "toolkit": "GitHub"
+ },
+ "GitHubSearchRepositories": {
+  "tool": "SearchRepositories",
+  "toolkit": "GitHub"
+ },
+ "GitHubSearchUsers": {
+  "tool": "SearchUsers",
+  "toolkit": "GitHub"
+ },
+ "GitHubUpdateRespository": {
+  "tool": "UpdateRespository",
+  "toolkit": "GitHub"
+ },
+ "GmailAddOrUpdateContact": {
+  "tool": "AddOrUpdateContact",
+  "toolkit": "Gmail"
+ },
+ "GmailDeleteContact": {
+  "tool": "DeleteContact",
+  "toolkit": "Gmail"
+ },
+ "GmailDeleteEmails": {
+  "tool": "DeleteEmails",
+  "toolkit": "Gmail"
+ },
+ "GmailDownloadAttachment": {
+  "tool": "DownloadAttachment",
+  "toolkit": "Gmail"
+ },
+ "GmailOrganizeEmail": {
+  "tool": "OrganizeEmail",
+  "toolkit": "Gmail"
+ },
+ "GmailReadEmail": {
+  "tool": "ReadEmail",
+  "toolkit": "Gmail"
+ },
+ "GmailSearchContacts": {
+  "tool": "SearchContacts",
+  "toolkit": "Gmail"
+ },
+ "GmailSearchEmails": {
+  "tool": "SearchEmails",
+  "toolkit": "Gmail"
+ },
+ "GmailSendEmail": {
+  "tool": "SendEmail",
+  "toolkit": "Gmail"
+ },
+ "GoogleCalendarCreateOrUpdateEvent": {
+  "tool": "CreateOrUpdateEvent",
+  "toolkit": "GoogleCalendar"
+ },
+ "GoogleCalendarDeleteEvents": {
+  "tool": "DeleteEvents",
+  "toolkit": "GoogleCalendar"
+ },
+ "GoogleCalendarGetEventsFromSharedCalendar": {
+  "tool": "GetEventsFromSharedCalendar",
+  "toolkit": "GoogleCalendar"
+ },
+ "GoogleCalendarReadEvents": {
+  "tool": "ReadEvents",
+  "toolkit": "GoogleCalendar"
+ },
+ "GoogleCalendarSearchEvents": {
+  "tool": "SearchEvents",
+  "toolkit": "GoogleCalendar"
+ },
+ "GoogleCalendarSendInvitations": {
+  "tool": "SendInvitations",
+  "toolkit": "GoogleCalendar"
+ },
+ "GoogleCalendarSetReminder": {
+  "tool": "SetReminder",
+  "toolkit": "GoogleCalendar"
+ },
+ "GoogleHomeAskQuestion": {
+  "tool": "AskQuestion",
+  "toolkit": "GoogleHome"
+ },
+ "GoogleHomeControlDevice": {
+  "tool": "ControlDevice",
+  "toolkit": "GoogleHome"
+ },
+ "GoogleHomeListDeviceActions": {
+  "tool": "ListDeviceActions",
+  "toolkit": "GoogleHome"
+ },
+ "GoogleHomeListReminders": {
+  "tool": "ListReminders",
+  "toolkit": "GoogleHome"
+ },
+ "GoogleHomePlayMedia": {
+  "tool": "PlayMedia",
+  "toolkit": "GoogleHome"
+ },
+ "GoogleHomeScheduleDeviceAction": {
+  "tool": "ScheduleDeviceAction",
+  "toolkit": "GoogleHome"
+ },
+ "GoogleHomeSearchDevices": {
+  "tool": "SearchDevices",
+  "toolkit": "GoogleHome"
+ },
+ "GoogleHomeSetReminder": {
+  "tool": "SetReminder",
+  "toolkit": "GoogleHome"
+ },
+ "GoogleMapAddAddress": {
+  "tool": "AddAddress",
+  "toolkit": "GoogleMap"
+ },
+ "GoogleMapGeocoding": {
+  "tool": "Geocoding",
+  "toolkit": "GoogleMap"
+ },
+ "GoogleMapGetCurrentLocation": {
+  "tool": "GetCurrentLocation",
+  "toolkit": "GoogleMap"
+ },
+ "GoogleMapGetDirections": {
+  "tool": "GetDirections",
+  "toolkit": "GoogleMap"
+ },
+ "GoogleMapGetLocationDetails": {
+  "tool": "GetLocationDetails",
+  "toolkit": "GoogleMap"
+ },
+ "GoogleMapGetLocationReviews": {
+  "tool": "GetLocationReviews",
+  "toolkit": "GoogleMap"
+ },
+ "GoogleMapReverseGeocoding": {
+  "tool": "ReverseGeocoding",
+  "toolkit": "GoogleMap"
+ },
+ "GoogleMapSearchAddressBook": {
+  "tool": "SearchAddressBook",
+  "toolkit": "GoogleMap"
+ },
+ "GoogleMapSearchLocations": {
+  "tool": "SearchLocations",
+  "toolkit": "GoogleMap"
+ },
+ "GoogleSearchGetSearchHistory": {
+  "tool": "GetSearchHistory",
+  "toolkit": "GoogleSearch"
+ },
+ "GoogleSearchGetSearchTrends": {
+  "tool": "GetSearchTrends",
+  "toolkit": "GoogleSearch"
+ },
+ "GoogleSearchImageSearch": {
+  "tool": "ImageSearch",
+  "toolkit": "GoogleSearch"
+ },
+ "GoogleSearchNewsSearch": {
+  "tool": "NewsSearch",
+  "toolkit": "GoogleSearch"
+ },
+ "GoogleSearchVideoSearch": {
+  "tool": "VideoSearch",
+  "toolkit": "GoogleSearch"
+ },
+ "GoogleSearchWebSearch": {
+  "tool": "WebSearch",
+  "toolkit": "GoogleSearch"
+ },
+ "IFTTTCreateApplet": {
+  "tool": "CreateApplet",
+  "toolkit": "IFTTT"
+ },
+ "IFTTTDeleteApplets": {
+  "tool": "DeleteApplets",
+  "toolkit": "IFTTT"
+ },
+ "IFTTTSearchActions": {
+  "tool": "SearchActions",
+  "toolkit": "IFTTT"
+ },
+ "IFTTTSearchApplets": {
+  "tool": "SearchApplets",
+  "toolkit": "IFTTT"
+ },
+ "IFTTTSearchConnectedServices": {
+  "tool": "SearchConnectedServices",
+  "toolkit": "IFTTT"
+ },
+ "IFTTTSearchTriggers": {
+  "tool": "SearchTriggers",
+  "toolkit": "IFTTT"
+ },
+ "IFTTTUpdateApplet": {
+  "tool": "UpdateApplet",
+  "toolkit": "IFTTT"
+ },
+ "IndoorRobotApplyAllowedOperation": {
+  "tool": "ApplyAllowedOperation",
+  "toolkit": "IndoorRobot"
+ },
+ "IndoorRobotFindObjects": {
+  "tool": "FindObjects",
+  "toolkit": "IndoorRobot"
+ },
+ "IndoorRobotFindPeople": {
+  "tool": "FindPeople",
+  "toolkit": "IndoorRobot"
+ },
+ "IndoorRobotGetAllowedOperations": {
+  "tool": "GetAllowedOperations",
+  "toolkit": "IndoorRobot"
+ },
+ "IndoorRobotGetCurrentState": {
+  "tool": "GetCurrentState",
+  "toolkit": "IndoorRobot"
+ },
+ "IndoorRobotGoToRoom": {
+  "tool": "GoToRoom",
+  "toolkit": "IndoorRobot"
+ },
+ "IndoorRobotHandObjectsToPerson": {
+  "tool": "HandObjectsToPerson",
+  "toolkit": "IndoorRobot"
+ },
+ "IndoorRobotListRooms": {
+  "tool": "ListRooms",
+  "toolkit": "IndoorRobot"
+ },
+ "IndoorRobotLookAroundObject": {
+  "tool": "LookAroundObject",
+  "toolkit": "IndoorRobot"
+ },
+ "InventoryManagementSystemAddItem": {
+  "tool": "AddItem",
+  "toolkit": "InventoryManagementSystem"
+ },
+ "InventoryManagementSystemDeleteItem": {
+  "tool": "DeleteItem",
+  "toolkit": "InventoryManagementSystem"
+ },
+ "InventoryManagementSystemGetItemDetails": {
+  "tool": "GetItemDetails",
+  "toolkit": "InventoryManagementSystem"
+ },
+ "InventoryManagementSystemListCategories": {
+  "tool": "ListCategories",
+  "toolkit": "InventoryManagementSystem"
+ },
+ "InventoryManagementSystemSearchItems": {
+  "tool": "SearchItems",
+  "toolkit": "InventoryManagementSystem"
+ },
+ "InventoryManagementSystemSearchSuppliers": {
+  "tool": "SearchSuppliers",
+  "toolkit": "InventoryManagementSystem"
+ },
+ "InventoryManagementSystemSetupAlert": {
+  "tool": "SetupAlert",
+  "toolkit": "InventoryManagementSystem"
+ },
+ "InventoryManagementSystemTrackInventory": {
+  "tool": "TrackInventory",
+  "toolkit": "InventoryManagementSystem"
+ },
+ "InventoryManagementSystemUpdateItem": {
+  "tool": "UpdateItem",
+  "toolkit": "InventoryManagementSystem"
+ },
+ "InvestmentManagerGetHoldingsInformation": {
+  "tool": "GetHoldingsInformation",
+  "toolkit": "InvestmentManager"
+ },
+ "InvestmentManagerListTransactions": {
+  "tool": "ListTransactions",
+  "toolkit": "InvestmentManager"
+ },
+ "InvestmentManagerMakeTransaction": {
+  "tool": "MakeTransaction",
+  "toolkit": "InvestmentManager"
+ },
+ "InvestmentManagerSearchInvestments": {
+  "tool": "SearchInvestments",
+  "toolkit": "InvestmentManager"
+ },
+ "NortonIdentitySafeAutoFillPassword": {
+  "tool": "AutoFillPassword",
+  "toolkit": "NortonIdentitySafe"
+ },
+ "NortonIdentitySafeAutoFillPersonalInfo": {
+  "tool": "AutoFillPersonalInfo",
+  "toolkit": "NortonIdentitySafe"
+ },
+ "NortonIdentitySafeCheckPasswordStrength": {
+  "tool": "CheckPasswordStrength",
+  "toolkit": "NortonIdentitySafe"
+ },
+ "NortonIdentitySafeDisableTwoFactorAuthentication": {
+  "tool": "DisableTwoFactorAuthentication",
+  "toolkit": "NortonIdentitySafe"
+ },
+ "NortonIdentitySafeEnableTwoFactorAuthentication": {
+  "tool": "EnableTwoFactorAuthentication",
+  "toolkit": "NortonIdentitySafe"
+ },
+ "NortonIdentitySafeExportPasswords": {
+  "tool": "ExportPasswords",
+  "toolkit": "NortonIdentitySafe"
+ },
+ "NortonIdentitySafeGeneratePassword": {
+  "tool": "GeneratePassword",
+  "toolkit": "NortonIdentitySafe"
+ },
+ "NortonIdentitySafeImportPasswords": {
+  "tool": "ImportPasswords",
+  "toolkit": "NortonIdentitySafe"
+ },
+ "NortonIdentitySafeRetrievePersonalInfo": {
+  "tool": "RetrievePersonalInfo",
+  "toolkit": "NortonIdentitySafe"
+ },
+ "NortonIdentitySafeSearchPasswords": {
+  "tool": "SearchPasswords",
+  "toolkit": "NortonIdentitySafe"
+ },
+ "NortonIdentitySafeSharePassword": {
+  "tool": "SharePassword",
+  "toolkit": "NortonIdentitySafe"
+ },
+ "NortonIdentitySafeStorePassword": {
+  "tool": "StorePassword",
+  "toolkit": "NortonIdentitySafe"
+ },
+ "NortonIdentitySafeStorePersonalInfo": {
+  "tool": "StorePersonalInfo",
+  "toolkit": "NortonIdentitySafe"
+ },
+ "ShopifyCreateProduct": {
+  "tool": "CreateProduct",
+  "toolkit": "Shopify"
+ },
+ "ShopifyDeleteProduct": {
+  "tool": "DeleteProduct",
+  "toolkit": "Shopify"
+ },
+ "ShopifyDraftOrder": {
+  "tool": "DraftOrder",
+  "toolkit": "Shopify"
+ },
+ "ShopifyGetOrderDetails": {
+  "tool": "GetOrderDetails",
+  "toolkit": "Shopify"
+ },
+ "ShopifyGetProductDetails": {
+  "tool": "GetProductDetails",
+  "toolkit": "Shopify"
+ },
+ "ShopifyGetStoreAnalytics": {
+  "tool": "GetStoreAnalytics",
+  "toolkit": "Shopify"
+ },
+ "ShopifyManageOrder": {
+  "tool": "ManageOrder",
+  "toolkit": "Shopify"
+ },
+ "ShopifySearchCustomers": {
+  "tool": "SearchCustomers",
+  "toolkit": "Shopify"
+ },
+ "ShopifySearchOrders": {
+  "tool": "SearchOrders",
+  "toolkit": "Shopify"
+ },
+ "ShopifySearchProducts": {
+  "tool": "SearchProducts",
+  "toolkit": "Shopify"
+ },
+ "ShopifyUpdateProduct": {
+  "tool": "UpdateProduct",
+  "toolkit": "Shopify"
+ },
+ "SlackCreateChannel": {
+  "tool": "CreateChannel",
+  "toolkit": "Slack"
+ },
+ "SlackDownloadFile": {
+  "tool": "DownloadFile",
+  "toolkit": "Slack"
+ },
+ "SlackGetUserDetails": {
+  "tool": "GetUserDetails",
+  "toolkit": "Slack"
+ },
+ "SlackJoinChannel": {
+  "tool": "JoinChannel",
+  "toolkit": "Slack"
+ },
+ "SlackLeaveChannel": {
+  "tool": "LeaveChannel",
+  "toolkit": "Slack"
+ },
+ "SlackManageMembership": {
+  "tool": "ManageMembership",
+  "toolkit": "Slack"
+ },
+ "SlackSearchChannelOrUser": {
+  "tool": "SearchChannelOrUser",
+  "toolkit": "Slack"
+ },
+ "SlackSearchMessage": {
+  "tool": "SearchMessage",
+  "toolkit": "Slack"
+ },
+ "SlackSendMessage": {
+  "tool": "SendMessage",
+  "toolkit": "Slack"
+ },
+ "SlackUpdateProfileAndStatus": {
+  "tool": "UpdateProfileAndStatus",
+  "toolkit": "Slack"
+ },
+ "SpokeoAccessCourtRecords": {
+  "tool": "AccessCourtRecords",
+  "toolkit": "Spokeo"
+ },
+ "SpokeoBackgroundCheck": {
+  "tool": "BackgroundCheck",
+  "toolkit": "Spokeo"
+ },
+ "SpokeoDownloadPublicRecord": {
+  "tool": "DownloadPublicRecord",
+  "toolkit": "Spokeo"
+ },
+ "SpokeoGetCriminalHistory": {
+  "tool": "GetCriminalHistory",
+  "toolkit": "Spokeo"
+ },
+ "SpokeoGetHistoricalData": {
+  "tool": "GetHistoricalData",
+  "toolkit": "Spokeo"
+ },
+ "SpokeoGetPersonDetails": {
+  "tool": "GetPersonDetails",
+  "toolkit": "Spokeo"
+ },
+ "SpokeoMonitorDataChanges": {
+  "tool": "MonitorDataChanges",
+  "toolkit": "Spokeo"
+ },
+ "SpokeoReversePhoneLookup": {
+  "tool": "ReversePhoneLookup",
+  "toolkit": "Spokeo"
+ },
+ "SpokeoSearchPeople": {
+  "tool": "SearchPeople",
+  "toolkit": "Spokeo"
+ },
+ "SpokeoVerifyIdentity": {
+  "tool": "VerifyIdentity",
+  "toolkit": "Spokeo"
+ },
+ "TDAmeritradeGetBalance": {
+  "tool": "GetBalance",
+  "toolkit": "TDAmeritrade"
+ },
+ "TDAmeritradeGetHoldingsInformation": {
+  "tool": "GetHoldingsInformation",
+  "toolkit": "TDAmeritrade"
+ },
+ "TDAmeritradeGetStockInformation": {
+  "tool": "GetStockInformation",
+  "toolkit": "TDAmeritrade"
+ },
+ "TDAmeritradeTradeStock": {
+  "tool": "TradeStock",
+  "toolkit": "TDAmeritrade"
+ },
+ "TeladocAccessMedicalHistory": {
+  "tool": "AccessMedicalHistory",
+  "toolkit": "Teladoc"
+ },
+ "TeladocAccessUserInfo": {
+  "tool": "AccessUserInfo",
+  "toolkit": "Teladoc"
+ },
+ "TeladocConsultDoctor": {
+  "tool": "ConsultDoctor",
+  "toolkit": "Teladoc"
+ },
+ "TeladocLeaveReview": {
+  "tool": "LeaveReview",
+  "toolkit": "Teladoc"
+ },
+ "TeladocManageAppointments": {
+  "tool": "ManageAppointments",
+  "toolkit": "Teladoc"
+ },
+ "TeladocRequestPrescription": {
+  "tool": "RequestPrescription",
+  "toolkit": "Teladoc"
+ },
+ "TeladocScheduleAppointment": {
+  "tool": "ScheduleAppointment",
+  "toolkit": "Teladoc"
+ },
+ "TeladocSearchDoctors": {
+  "tool": "SearchDoctors",
+  "toolkit": "Teladoc"
+ },
+ "TeladocSendMessage": {
+  "tool": "SendMessage",
+  "toolkit": "Teladoc"
+ },
+ "TeladocViewPrescriptions": {
+  "tool": "ViewPrescriptions",
+  "toolkit": "Teladoc"
+ },
+ "TeladocViewReviews": {
+  "tool": "ViewReviews",
+  "toolkit": "Teladoc"
+ },
+ "TerminalExecute": {
+  "tool": "Execute",
+  "toolkit": "Terminal"
+ },
+ "The23andMeDeleteData": {
+  "tool": "DeleteData",
+  "toolkit": "The23andMe"
+ },
+ "The23andMeDownloadData": {
+  "tool": "DownloadData",
+  "toolkit": "The23andMe"
+ },
+ "The23andMeGetGeneticData": {
+  "tool": "GetGeneticData",
+  "toolkit": "The23andMe"
+ },
+ "The23andMeGetGeneticInsights": {
+  "tool": "GetGeneticInsights",
+  "toolkit": "The23andMe"
+ },
+ "The23andMeGetHealthRecommendations": {
+  "tool": "GetHealthRecommendations",
+  "toolkit": "The23andMe"
+ },
+ "The23andMeListThirdPartyApps": {
+  "tool": "ListThirdPartyApps",
+  "toolkit": "The23andMe"
+ },
+ "The23andMeSetDataPrivacy": {
+  "tool": "SetDataPrivacy",
+  "toolkit": "The23andMe"
+ },
+ "The23andMeShareData": {
+  "tool": "ShareData",
+  "toolkit": "The23andMe"
+ },
+ "The23andMeUpdateData": {
+  "tool": "UpdateData",
+  "toolkit": "The23andMe"
+ },
+ "TodoistCreateTask": {
+  "tool": "CreateTask",
+  "toolkit": "Todoist"
+ },
+ "TodoistDeleteTask": {
+  "tool": "DeleteTask",
+  "toolkit": "Todoist"
+ },
+ "TodoistSearchTasks": {
+  "tool": "SearchTasks",
+  "toolkit": "Todoist"
+ },
+ "TodoistSetReminder": {
+  "tool": "SetReminder",
+  "toolkit": "Todoist"
+ },
+ "TodoistShareTask": {
+  "tool": "ShareTask",
+  "toolkit": "Todoist"
+ },
+ "TodoistUpdateTask": {
+  "tool": "UpdateTask",
+  "toolkit": "Todoist"
+ },
+ "TrafficControlAnalyzeTrafficPatterns": {
+  "tool": "AnalyzeTrafficPatterns",
+  "toolkit": "TrafficControl"
+ },
+ "TrafficControlCheckTrafficLightsStates": {
+  "tool": "CheckTrafficLightsStates",
+  "toolkit": "TrafficControl"
+ },
+ "TrafficControlGetIntersectionDetails": {
+  "tool": "GetIntersectionDetails",
+  "toolkit": "TrafficControl"
+ },
+ "TrafficControlGetRoadDetails": {
+  "tool": "GetRoadDetails",
+  "toolkit": "TrafficControl"
+ },
+ "TrafficControlGivePriorityToEmergencyVehicle": {
+  "tool": "GivePriorityToEmergencyVehicle",
+  "toolkit": "TrafficControl"
+ },
+ "TrafficControlGivePriorityToPublicTransportation": {
+  "tool": "GivePriorityToPublicTransportation",
+  "toolkit": "TrafficControl"
+ },
+ "TrafficControlManageTrafficLightState": {
+  "tool": "ManageTrafficLightState",
+  "toolkit": "TrafficControl"
+ },
+ "TrafficControlMonitorTrafficCongestion": {
+  "tool": "MonitorTrafficCongestion",
+  "toolkit": "TrafficControl"
+ },
+ "TrafficControlPredictTrafficCongestion": {
+  "tool": "PredictTrafficCongestion",
+  "toolkit": "TrafficControl"
+ },
+ "TrafficControlScheduleRoadMaintenance": {
+  "tool": "ScheduleRoadMaintenance",
+  "toolkit": "TrafficControl"
+ },
+ "TrafficControlSearchLocations": {
+  "tool": "SearchLocations",
+  "toolkit": "TrafficControl"
+ },
+ "TrafficControlSearchRoute": {
+  "tool": "SearchRoute",
+  "toolkit": "TrafficControl"
+ },
+ "TwilioCancelScheduledAction": {
+  "tool": "CancelScheduledAction",
+  "toolkit": "Twilio"
+ },
+ "TwilioGetPhoneNumberInfo": {
+  "tool": "GetPhoneNumberInfo",
+  "toolkit": "Twilio"
+ },
+ "TwilioGetReceivedSmsMessages": {
+  "tool": "GetReceivedSmsMessages",
+  "toolkit": "Twilio"
+ },
+ "TwilioGetScheduledActions": {
+  "tool": "GetScheduledActions",
+  "toolkit": "Twilio"
+ },
+ "TwilioGetSmsHistory": {
+  "tool": "GetSmsHistory",
+  "toolkit": "Twilio"
+ },
+ "TwilioGetSmsPricing": {
+  "tool": "GetSmsPricing",
+  "toolkit": "Twilio"
+ },
+ "TwilioSendSms": {
+  "tool": "SendSms",
+  "toolkit": "Twilio"
+ },
+ "TwitterManagerDeleteTweets": {
+  "tool": "DeleteTweets",
+  "toolkit": "TwitterManager"
+ },
+ "TwitterManagerFollowUsers": {
+  "tool": "FollowUsers",
+  "toolkit": "TwitterManager"
+ },
+ "TwitterManagerGetUserProfile": {
+  "tool": "GetUserProfile",
+  "toolkit": "TwitterManager"
+ },
+ "TwitterManagerLikeTweet": {
+  "tool": "LikeTweet",
+  "toolkit": "TwitterManager"
+ },
+ "TwitterManagerPostTweet": {
+  "tool": "PostTweet",
+  "toolkit": "TwitterManager"
+ },
+ "TwitterManagerReadTweet": {
+  "tool": "ReadTweet",
+  "toolkit": "TwitterManager"
+ },
+ "TwitterManagerReplyToTweet": {
+  "tool": "ReplyToTweet",
+  "toolkit": "TwitterManager"
+ },
+ "TwitterManagerRetweet": {
+  "tool": "Retweet",
+  "toolkit": "TwitterManager"
+ },
+ "TwitterManagerSearchTweets": {
+  "tool": "SearchTweets",
+  "toolkit": "TwitterManager"
+ },
+ "TwitterManagerUnfollowUsers": {
+  "tool": "UnfollowUsers",
+  "toolkit": "TwitterManager"
+ },
+ "TwitterManagerUnlikeTweet": {
+  "tool": "UnlikeTweet",
+  "toolkit": "TwitterManager"
+ },
+ "VenmoAddMoney": {
+  "tool": "AddMoney",
+  "toolkit": "Venmo"
+ },
+ "VenmoCheckBalance": {
+  "tool": "CheckBalance",
+  "toolkit": "Venmo"
+ },
+ "VenmoHandleRequest": {
+  "tool": "HandleRequest",
+  "toolkit": "Venmo"
+ },
+ "VenmoListLinkedAccounts": {
+  "tool": "ListLinkedAccounts",
+  "toolkit": "Venmo"
+ },
+ "VenmoRequestMoney": {
+  "tool": "RequestMoney",
+  "toolkit": "Venmo"
+ },
+ "VenmoSearchTransactions": {
+  "tool": "SearchTransactions",
+  "toolkit": "Venmo"
+ },
+ "VenmoSearchUsers": {
+  "tool": "SearchUsers",
+  "toolkit": "Venmo"
+ },
+ "VenmoSendMoney": {
+  "tool": "SendMoney",
+  "toolkit": "Venmo"
+ },
+ "VenmoViewFriendsList": {
+  "tool": "ViewFriendsList",
+  "toolkit": "Venmo"
+ },
+ "VenmoWithdrawMoney": {
+  "tool": "WithdrawMoney",
+  "toolkit": "Venmo"
+ },
+ "WebBrowserClearHistory": {
+  "tool": "ClearHistory",
+  "toolkit": "WebBrowser"
+ },
+ "WebBrowserClickElement": {
+  "tool": "ClickElement",
+  "toolkit": "WebBrowser"
+ },
+ "WebBrowserGetElementsDetails": {
+  "tool": "GetElementsDetails",
+  "toolkit": "WebBrowser"
+ },
+ "WebBrowserInputText": {
+  "tool": "InputText",
+  "toolkit": "WebBrowser"
+ },
+ "WebBrowserNavigateTo": {
+  "tool": "NavigateTo",
+  "toolkit": "WebBrowser"
+ },
+ "WebBrowserRetrieveElements": {
+  "tool": "RetrieveElements",
+  "toolkit": "WebBrowser"
+ },
+ "WebBrowserSearchHistory": {
+  "tool": "SearchHistory",
+  "toolkit": "WebBrowser"
+ }
+}

@@ -1,7 +1,7 @@
 ---
 name: agent-security-guard
 description: "Runtime interaction guard for Hermes/OpenClaw: a deterministic transition policy engine that keeps reading, browsing, and summarizing free while stripping command-authority from untrusted content. Separates origin trust from data sensitivity, classifies actions into tiers, blocks dangerous kill-chains (read secret -> external post, web -> shell, download -> execute, untrusted -> privileged memory), wraps untrusted content as data (not instructions), and emits machine-readable decisions with audit. Default mode: autonomous-safe."
-version: 0.4.3
+version: 0.4.4
 author: xMannixx
 license: MIT
 platforms: [linux, macos, windows]
@@ -94,6 +94,9 @@ one chain. `tiers.after_untrusted_content` tunes it.
 
 ## Status
 
+v0.4.4 asks before `cronjob_manage`, `delegate_task` and `computer_use` after
+outside content, like a shell command. See `benchmarks/` in the repository.
+
 v0.4.3 makes three patterns linear that crafted input could stall for
 seconds. Decisions are unchanged.
 
@@ -129,6 +132,6 @@ confirmation (see `references/self-modification.md`). v0.1.0 delivered the
 policy core, scanner + boundary wrapper, sequence kill-chain detection,
 SQLite/JSONL audit, memory bridge, CLI, and the plugin.
 
-1313 tests pass: the OpenClaw threat-class regressions, the self-improvement
+1318 tests pass: the OpenClaw threat-class regressions, the self-improvement
 end-to-end bar, and `tests/test_availability.py` (the guard must not block the
 host). See `README.md`, `ROADMAP.md`, and `references/`.

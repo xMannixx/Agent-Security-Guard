@@ -611,6 +611,7 @@ _STATE_CHANGING_KIND_NAMES = frozenset({
     "bash", "sh", "zsh", "pwsh", "terminal", "command", "run_terminal_cmd",
     "run_terminal_command", "run_in_terminal", "run_code", "code_interpreter",
     "python", "run_python", "python_repl", "run_script",
+    "cronjob_manage", "delegate_task", "computer_use",
     "write_file", "write", "file_write", "write_to_file", "create_file",
     "save_file", "edit_file", "edit", "file_edit", "multi_edit", "multiedit",
     "notebook_edit", "notebookedit", "patch", "apply_patch", "patch_file",

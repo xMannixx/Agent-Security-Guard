@@ -6,6 +6,37 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-11-10
+
+**Work handed on after a web read is asked about.** Found by the new
+benchmark. A scheduled job, a subagent and desktop control were not known to
+the guard. A page could have the agent hand a command on to one of them, where
+it runs later or in a turn of its own and the guard no longer sees the page.
+
+### Fixed
+
+- **`cronjob_manage`, `delegate_task` and `computer_use` count as execution.**
+  After outside content in the turn they go to Hermes's approval prompt, like
+  `terminal`. On their own they run, audited, as before. `process_manage`
+  stays free, since most of its calls only read a process's output; the
+  benchmark lists this as not stopped.
+
+### Added
+
+- **`benchmarks/`: what the guard stops, and what it costs.**
+  - 3,528 attacks on Hermes's own tools: 21 goals × 7 sources × 24
+    phrasings.
+  - InjecAgent's 1,054 public cases.
+  - 28 everyday tasks, the data blocks, and the time per call.
+  - Runs under three policies, deterministic, in under ten seconds, with no
+    model and no network.
+  - With the shipped policy, 1,728 of 1,920 attacks through web, search, X
+    or the browser are stopped (75.0 % before this release), whatever their
+    wording.
+  - 0 of 24 everyday tasks are asked about unless outside content and an
+    action meet in one turn.
+  - `tests/test_benchmark.py` keeps the headline from regressing.
+
 ## [0.4.3] - 2026-11-10
 
 **Hostile text can no longer stall the agent.** In the review of the catalog

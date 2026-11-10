@@ -35,6 +35,12 @@ _EXECUTION = (
     "execute_code", "exec_code", "run_code", "code_execution",
     "code_interpreter", "python", "run_python", "execute_python",
     "python_repl", "run_script", "execute_script", "eval",
+    # Hermes tools that make something run without being a shell: a scheduled
+    # job runs a prompt with tools later and a subagent runs a task with tools
+    # of its own, both in a turn of their own, where outside content read now
+    # is no longer in the chain; computer_use types and clicks on the desktop.
+    # (process_manage stays out: most of its calls read a process's output.)
+    "cronjob_manage", "delegate_task", "computer_use",
 )
 
 _LOCAL_WRITE = (
