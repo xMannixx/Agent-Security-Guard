@@ -6,12 +6,47 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-11-10
+
+**Hostile text can no longer stall the agent.** In the review of the catalog
+entry, Nous Research found three patterns that backtracked badly: 20 KB of
+crafted text held the agent for seconds to minutes. All three are linear now.
+Decisions are unchanged.
+
+### Fixed
+
+- **`rm -r` in content** (`patterns.py`, scanned on every web, search and
+  browser result): `\brm\s+-[a-z]*r[a-z]*f?\b` took 7 s on `rm -` plus 20 000
+  letters. It is `\brm\s+-[a-z]*r` now, which finds every command it found before.
+- **Paths in a patch body** (`policy.py`, on model-written file payloads):
+  `(\S.*?)\s*$` took 2.4 s on a header line of 20 000 spaces. The path now
+  runs to the last non-space of the line; a CRLF line end is still stripped.
+- **No-write wording in the user's message** (`scope.py`, opt-in
+  `scope_from_text`): the two adjacent `\s*` around an optional quote took
+  6 s on a comma and 20 000 spaces, and a plain `\s*` after a line break took
+  25 s on 20 000 newlines. The spaces after a break no longer include
+  newlines: a newline is a break of its own, so nothing that matched before is
+  missed.
+
 ### Added
 
+- **`tests/test_regex_timing.py`:** every one of these patterns, through its
+  real caller, on 20 KB of hostile input on one line and across many, under
+  50 ms; and the commands, paths and wording they must still find.
 - **A demo** in `docs/demo/`: a 50-second video from a real Hermes session
   (a page proposes a command, the guard asks first, the command is denied,
   the user's own request runs free), shown on the README as an animated GIF,
   and the page it uses.
+
+### Changed
+
+- **The user's message is only scanned for scope wording when
+  `scope_from_text` is on.** Before, `pre_llm_call` scanned every message and
+  kept the result even when nothing would read it.
+- **The plugin follows the active Hermes profile.** `guard.yaml` and an
+  operator copy of the engine are looked for in Hermes's own home
+  (`get_hermes_home()`, which follows `HERMES_HOME` and profiles) instead of
+  always `~/.hermes`. Outside Hermes it is still `~/.hermes`.
 
 ## [0.4.2] - 2026-11-09
 

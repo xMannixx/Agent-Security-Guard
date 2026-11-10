@@ -73,7 +73,10 @@ INJECTION_PATTERNS: List[Tuple[str, Pattern]] = [
 EXECUTABLE_PATTERNS: List[Tuple[str, Pattern]] = [
     ("pipe_to_shell", re.compile(r"(?i)(curl|wget|fetch)\b[^\n|]{0,200}\|\s*(sudo\s+)?(ba|z|d|fi)?sh\b")),
     ("generic_pipe_shell", re.compile(r"(?i)\|\s*(sudo\s+)?(ba|z)?sh\b")),
-    ("rm_rf", re.compile(r"(?i)\brm\s+-[a-z]*r[a-z]*f?\b")),
+    # Any flag cluster holding r (-r, -rf, -fr, -Rv ...). No trailing part: the
+    # old `[a-z]*f?\b` added nothing to the match and backtracked badly on a
+    # long run of letters.
+    ("rm_rf", re.compile(r"(?i)\brm\s+-[a-z]*r")),
     ("sudo", re.compile(r"(?i)(^|\s)sudo\s+")),
     ("invoke_expression", re.compile(r"(?i)\b(iex|invoke-expression)\b")),
     ("powershell_encoded", re.compile(r"(?i)powershell[^\n]{0,80}-enc(odedcommand)?\b")),

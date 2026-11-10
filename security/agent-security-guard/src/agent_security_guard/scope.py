@@ -90,9 +90,13 @@ def _compile_alt(phrases: List[str]) -> Pattern:
 
 # Clause-anchored: the phrase must start the message or follow a clause break,
 # so it is an instruction ("..., nichts ändern") rather than an incidental
-# substring inside a longer sentence.
+# substring inside a longer sentence. One optional quote or bracket may sit in
+# between. The spaces after the break exclude newlines: a newline is itself a
+# break, so nothing is lost, and every newline of a long run no longer scans the
+# rest of the run again. (`\s*["'(]?\s*` backtracked badly on a long run of
+# spaces, `\s*` alone on a long run of newlines.)
 _NO_WRITE_RE = re.compile(
-    r"(?:^|[.,;:!?\n]|\bund\b|\baber\b|\bplease\b)\s*[\"'(]?\s*(?:"
+    r"(?:^|[.,;:!?\n]|\bund\b|\baber\b|\bplease\b)[^\S\n]*(?:[\"'(]\s*)?(?:"
     + "|".join(f"(?:{p})" for p in _NO_WRITE_PHRASES)
     + r")",
     re.IGNORECASE,

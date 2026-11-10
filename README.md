@@ -11,7 +11,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.8%2B-blue.svg" alt="Python 3.8+"></a>
   <img src="https://img.shields.io/badge/deps-stdlib%20only-success.svg" alt="Dependencies: stdlib only">
-  <img src="https://img.shields.io/badge/tests-1274%20passing-success.svg" alt="Tests: 1274 passing">
+  <img src="https://img.shields.io/badge/tests-1313%20passing-success.svg" alt="Tests: 1313 passing">
 </p>
 
 <p align="center">
@@ -359,6 +359,11 @@ python -m pytest tests -v
 No runtime dependencies — pure stdlib. `pytest` only for development.
 
 ## Status & roadmap
+
+v0.4.3 — hostile text can no longer stall the agent: three patterns that
+backtracked for seconds on 20 KB of crafted input (a web result, a patch body,
+a user message) are linear now, with a timing test for each. Decisions are
+unchanged.
 
 v0.4.2 — installable from the Hermes plugin catalog: the plugin directory
 carries its own copy of the engine and declares its hooks and the Hermes it

@@ -97,6 +97,11 @@ stated. The guard's own files are recognized on Windows.
 The plugin directory carries its own copy of the engine, so an install that
 checks out only `plugin/` runs the full policy, not the degraded fallback.
 
+## 0.4.3 — No stalls on hostile text (done)
+
+Three patterns that backtracked on crafted input are linear, each with a
+timing test on 20 KB. Found in the review of the catalog entry.
+
 ## Next
 
 - **Shell commands.** What an agent reads, sends or rewrites through a shell
