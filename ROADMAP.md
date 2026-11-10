@@ -102,7 +102,20 @@ checks out only `plugin/` runs the full policy, not the degraded fallback.
 Three patterns that backtracked on crafted input are linear, each with a
 timing test on 20 KB. Found in the review of the catalog entry.
 
+## 0.4.4 — Benchmark, and work handed on (done)
+
+A benchmark of what the guard stops and what it costs (`benchmarks/`). It
+found three Hermes tools the guard did not know: a scheduled job, a subagent
+and desktop control now count as execution.
+
 ## Next
+
+- **Third-party tools after outside content.** InjecAgent's bank, smart-lock
+  and similar MCP tools stay free after a web page (561 / 1,054 stopped). An
+  opt-in rule that asks about unrecognized tools after outside content would
+  stop all of them; how often it would ask is the open question.
+- **Browser actions** (`browser_exec` filling forms and clicking) are not told
+  apart from browsing.
 
 - **Shell commands.** What an agent reads, sends or rewrites through a shell
   is not seen: `cat .env`, `curl`, replacing the guard's files. The guard sits

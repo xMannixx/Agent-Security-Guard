@@ -11,13 +11,19 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.8%2B-blue.svg" alt="Python 3.8+"></a>
   <img src="https://img.shields.io/badge/deps-stdlib%20only-success.svg" alt="Dependencies: stdlib only">
-  <img src="https://img.shields.io/badge/tests-1313%20passing-success.svg" alt="Tests: 1313 passing">
+  <img src="https://img.shields.io/badge/tests-1318%20passing-success.svg" alt="Tests: 1318 passing">
 </p>
 
 <p align="center">
   <a href="docs/demo/agent-security-guard-demo.mp4"><img src="assets/demo.gif" alt="Demo: a web page tells Hermes to run a command; Agent Security Guard asks first, the command is denied, the user's own request runs free" width="900"></a><br>
   <sub>A real Hermes session, 50 s. <a href="docs/demo/agent-security-guard-demo.mp4">Video (MP4)</a> · <a href="https://x.com/Perry2096581714/status/2119758994139185266">on X</a></sub>
 </p>
+
+**[Benchmark](benchmarks/):** 1,728 of 1,920 attacks on Hermes's own tools
+stopped (90 %), whatever their wording; text filtering on the same pages
+recognizes 16.7 %. 0 of 24 everyday tasks interrupted, 0.1 ms per call, plus
+InjecAgent's 1,054 public cases. What it does not stop is measured and
+listed too.
 
 The companion to [`agent-memory`](../Agent%20memory%20skill). The memory skill
 protects long-term truth (what may be remembered). This guard protects the
@@ -145,7 +151,7 @@ For names the guard does not know, or reads wrongly, declare the tier in
 ```yaml
 tool_tiers:
   codebase_search: read_only
-  cronjob_manage: config_change
+  my_scheduler: config_change
   my_deploy_tool: execution
 ```
 
@@ -360,6 +366,12 @@ python -m pytest tests -v
 No runtime dependencies — pure stdlib. `pytest` only for development.
 
 ## Status & roadmap
+
+v0.4.4 — a scheduled job, a subagent or desktop control asked for after a web
+read is now asked about like a shell command: they run later or in a turn of
+their own, out of the guard's sight. Found by the new
+[benchmark](benchmarks/), which measures what the guard stops and what it
+costs.
 
 v0.4.3 — hostile text can no longer stall the agent: three patterns that
 backtracked for seconds on 20 KB of crafted input (a web result, a patch body,

@@ -613,7 +613,6 @@ def _after_web_read(next_action, context=None, config=None):
     AgentAction(kind="memory_search", metadata={"query": "deploy steps"}),
     AgentAction(kind="send_message", metadata={"text": "done"}),
     AgentAction(kind="todo_write"),
-    AgentAction(kind="delegate_task"),
 ])
 def test_reads_and_unrecognized_tools_stay_free_after_a_web_read(action):
     decision = _after_web_read(action)
