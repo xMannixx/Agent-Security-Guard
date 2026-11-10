@@ -46,7 +46,8 @@ hermes plugins install agent-security-guard --enable
 Start a new session afterwards; hooks load at session start.
 
 The default mode is `autonomous-safe`. To try it without it ever blocking,
-create `~/.hermes/guard.yaml` with `mode: monitor`: it then only records what
+create `guard.yaml` in your Hermes home (`~/.hermes/` or the active
+profile's) with `mode: monitor`: it then only records what
 it would have done. `strict` additionally asks about tools it does not know.
 A root-owned `/etc/agent-security-guard/guard.yaml` takes precedence over the
 one in your home, so an agent cannot switch its own guard off.
@@ -56,7 +57,7 @@ one in your home, so an agent cannot switch its own guard off.
 - **No network, no shell, no background process, no credentials.** Standard
   library only, no dependencies.
 - **Reads** its policy (`/etc/agent-security-guard/guard.yaml`, else
-  `~/.hermes/guard.yaml`, else built-in defaults). For file tools it looks at
+  `guard.yaml` in the Hermes home, else built-in defaults). For file tools it looks at
   the path the tool names (`realpath`, `stat`) to tell e.g. a `.env` behind a
   link; it does not read the file's contents.
 - **Writes** its audit trail to `$XDG_STATE_HOME/agent-security-guard/`
@@ -74,7 +75,9 @@ one in your home, so an agent cannot switch its own guard off.
   a secret.
 - It is **not a sandbox.** It decides before a call; it does not contain what
   an approved command does.
-- One policy per OS user, not per Hermes profile.
+- One audit trail per OS user: Hermes profiles each read their own
+  `guard.yaml`, but write to the same trail. The root-owned policy in `/etc`
+  applies to all of them.
 
 ## More
 
