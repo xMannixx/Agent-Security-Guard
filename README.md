@@ -7,6 +7,14 @@
 <p align="center"><strong>A deterministic transition policy engine for Hermes / OpenClaw agents.</strong><br>Keeps reading, browsing, and summarizing free — strips command-authority from untrusted content.</p>
 
 <p align="center">
+  <a href="https://github.com/NousResearch/hermes-agent/blob/main/plugin-catalog/agent-security-guard.yaml"><img src="https://img.shields.io/badge/%E2%9C%93_Official-Hermes_Plugin_Catalog-7c3aed?style=for-the-badge" alt="Official Hermes Plugin Catalog" height="36"></a>
+</p>
+
+<p align="center"><b>Reviewed and accepted by Nous Research</b> (<a href="https://github.com/NousResearch/hermes-agent/pull/151810">PR</a>) · install in one line:</p>
+
+<p align="center"><code>hermes plugins install agent-security-guard --enable</code></p>
+
+<p align="center">
   <a href="https://github.com/xMannixx/Agent-Security-Guard/actions/workflows/ci.yml"><img src="https://github.com/xMannixx/Agent-Security-Guard/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.8%2B-blue.svg" alt="Python 3.8+"></a>
@@ -369,7 +377,8 @@ No runtime dependencies — pure stdlib. `pytest` only for development.
 
 ## Status & roadmap
 
-v0.4.4 — a scheduled job, a subagent or desktop control asked for after a web
+v0.4.4 — in the official Hermes plugin catalog since 2026-11-11, after review
+by Nous Research. A scheduled job, a subagent or desktop control asked for after a web
 read is now asked about like a shell command: they run later or in a turn of
 their own, out of the guard's sight. Found by the new
 [benchmark](benchmarks/), which measures what the guard stops and what it
