@@ -7,6 +7,7 @@
 <p align="center"><strong>A deterministic transition policy engine for Hermes / OpenClaw agents.</strong><br>Keeps reading, browsing, and summarizing free — strips command-authority from untrusted content.</p>
 
 <p align="center">
+  <a href="https://github.com/NousResearch/hermes-agent/blob/main/plugin-catalog/agent-security-guard.yaml"><img src="https://img.shields.io/badge/Hermes-plugin%20catalog-7c3aed.svg" alt="In the Hermes plugin catalog"></a>
   <a href="https://github.com/xMannixx/Agent-Security-Guard/actions/workflows/ci.yml"><img src="https://github.com/xMannixx/Agent-Security-Guard/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.8%2B-blue.svg" alt="Python 3.8+"></a>
@@ -18,6 +19,13 @@
   <a href="docs/demo/agent-security-guard-demo.mp4"><img src="assets/demo.gif" alt="Demo: a web page tells Hermes to run a command; Agent Security Guard asks first, the command is denied, the user's own request runs free" width="900"></a><br>
   <sub>A real Hermes session, 50 s. <a href="docs/demo/agent-security-guard-demo.mp4">Video (MP4)</a> · <a href="https://x.com/Perry2096581714/status/2119758994139185266">on X</a></sub>
 </p>
+
+**In the official [Hermes plugin catalog](https://github.com/NousResearch/hermes-agent/blob/main/plugin-catalog/agent-security-guard.yaml)**, reviewed and accepted
+by Nous Research ([PR](https://github.com/NousResearch/hermes-agent/pull/151810)):
+
+```bash
+hermes plugins install agent-security-guard --enable
+```
 
 **[Benchmark](benchmarks/):** 1,728 of 1,920 attacks on Hermes's own tools
 stopped (90 %), whatever their wording; text filtering on the same pages
@@ -368,6 +376,9 @@ python -m pytest tests -v
 No runtime dependencies — pure stdlib. `pytest` only for development.
 
 ## Status & roadmap
+
+Since 2026-11-11 the plugin (0.4.4) is listed in the official Hermes plugin
+catalog, after review by Nous Research.
 
 v0.4.4 — a scheduled job, a subagent or desktop control asked for after a web
 read is now asked about like a shell command: they run later or in a turn of
