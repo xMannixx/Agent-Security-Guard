@@ -598,3 +598,14 @@ def test_shipped_defaults_protect_skill_and_policy_files():
     cfg = load_config(None)
     assert cfg.tool_tiers == {}
     assert cfg.self_modification_paths == ["SKILL.md", "guard.yaml"]
+
+
+def test_a_0_5_0_policy_with_mcp_hints_still_loads(tmp_path):
+    # mcp_hints read Hermes's private MCP registry and was retired in 0.5.1;
+    # a guard.yaml that still names it must load, not stop the guard.
+    from agent_security_guard.policy import load_config
+
+    for value in ("true", "false"):
+        path = tmp_path / f"guard-{value}.yaml"
+        path.write_text(f"mode: autonomous-safe\nmcp_hints: {value}\n", encoding="utf-8")
+        assert load_config(str(path)).mode == "autonomous-safe"

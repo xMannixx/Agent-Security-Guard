@@ -32,9 +32,10 @@ the page says:
   the browser or a `curl` in the terminal are stopped before the tool runs.
   This includes a page that has the browser tool fill a bank form or run a
   shell command, and input typed into a running shell.
-- **All 1,054 [InjecAgent](https://github.com/uiuc-kang-lab/InjecAgent) cases**
-  delivered as a web page are stopped, also those aimed at third-party (MCP)
-  tools such as a bank's or a smart lock's.
+- **[InjecAgent](https://github.com/uiuc-kang-lab/InjecAgent) delivered as a
+  web page:** 561 of 1,054 cases stopped as shipped, all 1,054 with
+  `mode: strict`. The rest aim at third-party (MCP) tools such as a bank's or
+  a smart lock's, which the guard does not know by name.
 - **The wording makes no difference.** Each of 24 phrasings is stopped
   equally often: polite, hidden, in German, base64 or with zero-width
   characters.
@@ -94,12 +95,11 @@ one in your home, so an agent cannot switch its own guard off.
 - **Messaging tools are not treated as sending out.** `send_message` is how
   Hermes answers you, so it is audited, not stopped — also when the text holds
   a secret.
-- **Third-party (MCP) tools are judged by what their server declares.** A
-  tool that does not declare itself read-only is asked about after outside
-  content; one that does stays free, even if the server says so wrongly.
-  What an MCP tool returns counts as outside content only for servers you
-  mark `trust: untrusted` in Hermes's config (or list in
-  `untrusted_content_tools`).
+- **Third-party (MCP) tools it does not know** (a bank's, a smart lock's)
+  stay free after outside content. Declare them in `tool_tiers`, or run
+  `mode: strict`. What an MCP tool returns counts as outside content only if
+  you list it in `untrusted_content_tools`. (0.5.0 read this from Hermes's
+  private MCP registry; 0.5.1 uses public Hermes surfaces only.)
 - **A downloaded file is outside content only if you say where downloads
   live** (`untrusted_paths`, e.g. `~/Downloads/`).
 - **The browser tool's code is judged by an allow-list**, not run. Code that

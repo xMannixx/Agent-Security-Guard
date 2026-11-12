@@ -31,37 +31,15 @@ REPO = HERE.parent
 
 POLICIES = {
     "default": "the policy as shipped (mode autonomous-safe)",
-    "no-hints": "as shipped, with `mcp_hints: false` (the guard before 0.5.0 for MCP tools)",
-    "mcp-untrusted": "as shipped, the MCP servers marked `trust: untrusted` in Hermes's config",
     "lists": "as shipped, plus `mcp__*` in untrusted_content_tools and `~/Downloads/` in untrusted_paths (two lines)",
     "strict": "as shipped, with `mode: strict`",
 }
-
-# What Hermes records when it connects an MCP server (tools/mcp_tool.py): the
-# readOnlyHint each tool declares and the server's trust. Simulated here: a
-# tool whose name starts with a reading verb declares itself read-only, as a
-# well-behaved server would; every other tool declares nothing, which Hermes
-# and the guard count as write-capable.
-_READ_VERBS = ("get", "read", "search", "list", "view", "fetch", "find", "check",
-               "query", "retrieve", "show", "lookup", "browse", "describe", "count")
-
-
-def _simulated_mcp_facts(untrusted_servers: bool):
-    def facts(tool_name: str):
-        if not tool_name.startswith("mcp__"):
-            return None
-        verb = tool_name.split("__")[-1].split("_")[0]
-        return verb in _READ_VERBS, untrusted_servers
-    return facts
-
 
 # --- One policy, in its own process -----------------------------------------
 
 def _policy_text(name: str) -> str:
     text = (REPO / "guard.yaml").read_text(encoding="utf-8")
-    if name == "no-hints":
-        text = re.sub(r"^mcp_hints: true$", "mcp_hints: false", text, count=1, flags=re.MULTILINE)
-    elif name == "lists":
+    if name == "lists":
         text = text.replace("untrusted_content_tools:\n", 'untrusted_content_tools:\n  - "mcp__*"\n', 1)
         text = text.replace("untrusted_paths: []", 'untrusted_paths:\n  - "~/Downloads/"', 1)
     elif name == "strict":
@@ -121,7 +99,6 @@ def run_one_policy(policy: str, quick: bool) -> Dict[str, Any]:
     import scenarios  # noqa: E402
 
     guard_plugin._SYSTEM_CONFIG = Path(os.environ["HOME"]) / "no-etc" / "guard.yaml"
-    guard_plugin._mcp_facts = _simulated_mcp_facts(untrusted_servers=policy == "mcp-untrusted")
     status = guard_plugin.guard_status()
     assert status["available"], status
     from agent_security_guard.scanner import scan_input  # noqa: E402  (the copy the plugin loaded)
@@ -354,8 +331,8 @@ def render_markdown(results: Dict[str, Dict[str, Any]], meta: Dict[str, Any]) ->
         "Stopped = Hermes asks the user first, or the call is refused. Covered sources: web page, "
         "search results, X, browser, the output of a shell command that fetches from another host. "
         "All sources adds a downloaded file read with `read_file` and an MCP mail tool, which count as "
-        "outside content only once the operator says so (`untrusted_paths`, or `trust: untrusted` on "
-        "the MCP server in Hermes).",
+        "outside content only once the operator says so (`untrusted_paths`, or the MCP tool listed in "
+        "`untrusted_content_tools`).",
         "",
         "| Goal | " + " | ".join(f"{p}: covered sources" for p in results) + " | default: all sources |",
         "|---|" + "---|" * (len(results) + 1),

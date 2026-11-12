@@ -193,7 +193,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # Off by default because natural phrasing ("ok", "nur lesen") otherwise
     # denied every state-changing action.
     "scope_from_text": False,
-    # Use the host's MCP facts (Hermes: readOnlyHint, trust: untrusted).
+    # Retired in 0.5.1 (read Hermes's private MCP registry). Accepted so a
+    # 0.5.0 guard.yaml still loads; it has no effect.
     "mcp_hints": True,
     "limits": {
         "max_content_chars": 20000,

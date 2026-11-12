@@ -39,7 +39,6 @@ What Hermes actually sends and reads (checked against its plugin dispatcher):
 
 from __future__ import annotations
 
-import dataclasses
 import fnmatch
 import hashlib
 import importlib.util
@@ -52,7 +51,7 @@ import sys
 import threading
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("agent_security_guard_plugin")
 
@@ -341,7 +340,7 @@ def wrap_tool_result(**kwargs) -> Optional[str]:
             return None
         action = _extract_action(kwargs)
         if action is None or not brings_untrusted_content(
-            normalize_action(action), _config_for_call(adapter.config, tool_name)
+            normalize_action(action), adapter.config
         ):
             return None
         metadata: Dict[str, Any] = {"source_kind": "web_fetch"}
@@ -927,79 +926,8 @@ def _with_positional(positional: tuple, kwargs: Dict[str, Any]) -> Dict[str, Any
     return merged
 
 
-# --------------------------------------------------------------------------- #
-# What Hermes knows about its third-party (MCP) tools
-# --------------------------------------------------------------------------- #
-#
-# Hermes records, when it connects an MCP server, whether each of its tools
-# declares ``readOnlyHint: true`` and whether the operator marked the server
-# ``trust: untrusted`` (tools/mcp_tool.py). Hermes itself asks before a
-# write-capable call on an untrusted server. The guard uses the same facts:
-#
-# - a tool that does not declare itself read-only (a missing or malformed hint
-#   counts as write-capable, as in Hermes) is an external write, recognized
-#   like a host tool by name: it runs, audited, on its own and goes to the
-#   approval prompt once outside content is in the turn;
-# - what a tool of an untrusted server returns is outside content.
-#
-# A tool the operator declared in ``tool_tiers`` keeps that tier. A hint that
-# says read-only does not make a tool a read: an unrecognized tool stays one,
-# so ``mode: strict`` still asks about it. ``mcp_hints: false`` turns this off.
-
-
-def _hermes_mcp_facts(tool_name: str) -> Optional[Tuple[bool, bool]]:
-    """(read_only, untrusted_server) for an MCP tool Hermes registered, else None."""
-    try:
-        from tools import mcp_tool as core  # type: ignore
-        from tools.mcp_tool_schema import mcp_prefixed_tool_name  # type: ignore
-        from tools.mcp_tool_scope import _resolve_server_key, _server_key  # type: ignore
-    except Exception:
-        return None
-    try:
-        server = core._mcp_tool_server_names.get(tool_name)
-        if server is None:
-            return None
-        hints = core._tool_read_only_hints.get(_resolve_server_key(server), {}) or {}
-        read_only = any(
-            value is True and mcp_prefixed_tool_name(server, raw) == tool_name
-            for raw, value in hints.items()
-        )
-        trust = core._server_trust_levels.get(_server_key(server), core._TRUST_FULL)
-        return read_only, trust != core._TRUST_FULL
-    except Exception as exc:
-        logger.warning("reading Hermes's MCP facts for %s failed: %s", tool_name, exc)
-        return None
-
-
-# Replaced by the benchmark and the tests, which run without Hermes.
-_mcp_facts: Callable[[str], Optional[Tuple[bool, bool]]] = _hermes_mcp_facts
-
-
-def _config_for_call(config, tool_name: str):
-    """The config for one call: the operator's, plus Hermes's MCP facts."""
-    name = str(tool_name or "").strip().lower()
-    if config is None or not getattr(config, "mcp_hints", False) or not name.startswith("mcp_"):
-        return config
-    facts = _mcp_facts(str(tool_name))
-    if facts is None:
-        return config
-    read_only, untrusted_server = facts
-    changes: Dict[str, Any] = {}
-    if not read_only and name not in config.tool_tiers:
-        changes["host_tool_tiers"] = {**config.host_tool_tiers, name: "external_write"}
-    if untrusted_server:
-        changes["untrusted_content_tools"] = [*config.untrusted_content_tools, _glob_literal(name)]
-    return dataclasses.replace(config, **changes) if changes else config
-
-
-def _glob_literal(name: str) -> str:
-    """A tool name as a glob pattern that matches only itself."""
-    return re.sub(r"([*?\[])", r"[\1]", name)
-
-
 def _extract_context(kwargs: Dict[str, Any], adapter) -> GuardContext:
-    call = _tool_call(kwargs)
-    config = _config_for_call(adapter.config, call[0] if call else "")
+    config = adapter.config
     no_write, short_conf = _scope_flags(kwargs, config)
     sensitivity = _enum(DataSensitivity, kwargs.get("data_sensitivity"), None)
     return GuardContext(
