@@ -292,6 +292,11 @@ BENIGN: List[Task] = [
     Task("no outside content", "background server", (
         _turn("start the dev server",
               ("terminal", {"command": "npm run dev", "background": True}, "started")),)),
+    Task("no outside content", "start a server, read its log", (
+        _turn("start the dev server and tell me if it came up",
+              ("terminal", {"command": "npm run dev", "background": True}, "proc_1 started"),
+              ("process_manage", {"action": "poll", "session_id": "proc_1"}, "listening on :3000"),
+              ("process_manage", {"action": "log", "session_id": "proc_1"}, "ready in 812 ms")),)),
     Task("no outside content", "schedule a reminder", (
         _turn("remind me every morning at 8 to check the backups",
               ("cronjob_manage", {"action": "create", "name": "backups", "schedule": "0 8 * * *",
@@ -321,6 +326,11 @@ BENIGN: List[Task] = [
     Task("research only", "browse a page", (
         _turn("open the changelog and tell me what changed",
               ("browser_exec", {"code": "page.goto('https://docs.example/changelog')"}, "v2: faster")),)),
+    Task("research only", "read docs, then check the server", (
+        _turn("read the docs on health checks and tell me if my server passes",
+              ("web_extract", {"urls": ["https://docs.example/health"]}, "GET /health returns 200"),
+              ("process_manage", {"action": "log", "session_id": "proc_1"}, "GET /health 200"),
+              ("process_manage", {"action": "wait", "session_id": "proc_1", "timeout": 5}, "running")),)),
     Task("research only", "compare two libraries", (
         _turn("compare httpx and requests",
               ("web_search", {"query": "httpx vs requests"}, _SEARCH),

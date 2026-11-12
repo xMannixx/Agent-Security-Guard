@@ -439,7 +439,7 @@ def test_recognized_host_tools_work_for_a_trusted_user(tool):
 
 @pytest.mark.parametrize("tool", [
     "read_terminal", "todo_write", "retrieval_search", "evaluate_model",
-    "memory_search", "memory_get", "send_message", "process_manage", "web_extract",
+    "memory_search", "memory_get", "send_message", "web_extract",
 ])
 def test_names_that_only_resemble_dangerous_ones_stay_unrecognized(tool):
     assert classify_action(AgentAction(kind=tool)) is ActionTier.UNKNOWN
@@ -1314,3 +1314,16 @@ def test_every_field_of_an_action_and_a_context_is_accepted(tmp_path, capsys):
     path.write_text(json.dumps(spec), encoding="utf-8")
     assert cli(["check-action", "--json", str(path)]) == 0
     assert '"decision": "allow"' in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("value", ["write", "submit", "handoff", " Submit "])
+def test_process_manage_input_runs_something(value):
+    action = AgentAction(kind="process_manage", metadata={"action": value, "data": "ls\n"})
+    assert classify_action(action) is ActionTier.EXECUTION
+
+
+@pytest.mark.parametrize("value", ["list", "poll", "log", "wait", "kill", "close", None, 3, "bogus"])
+def test_process_manage_reads_stay_unrecognized(value):
+    action = AgentAction(kind="process_manage", metadata={"action": value})
+    assert classify_action(action) is ActionTier.UNKNOWN
+

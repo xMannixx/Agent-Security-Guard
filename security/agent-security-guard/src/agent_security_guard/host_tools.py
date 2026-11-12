@@ -20,7 +20,7 @@ stdlib-only.
 
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, Tuple
 
 from .types import ActionTier
 
@@ -39,7 +39,7 @@ _EXECUTION = (
     # job runs a prompt with tools later and a subagent runs a task with tools
     # of its own, both in a turn of their own, where outside content read now
     # is no longer in the chain; computer_use types and clicks on the desktop.
-    # (process_manage stays out: most of its calls read a process's output.)
+    # (process_manage is judged by its action, see TIER_BY_ACTION below.)
     "cronjob_manage", "delegate_task", "computer_use",
 )
 
@@ -89,6 +89,20 @@ UNTRUSTED_CONTENT_TOOLS = (
     "x_search", "http_get", "https_get", "fetch_url", "read_url", "scrape",
     "browser", "browser_*",
 )
+
+# Tools whose calls are mostly reads and only sometimes act, told apart by the
+# value of one argument. Hermes's ``process_manage`` reads a background
+# process (list, poll, log, wait) or sends it input: ``write`` and ``submit``
+# type into a shell that is already running, ``handoff`` passes the process on
+# to the parent agent. Those three run something, the rest stay unrecognized
+# (allowed, audited); ``kill`` and ``close`` end a process the agent started.
+TIER_BY_ACTION: Dict[str, Tuple[str, Dict[str, ActionTier]]] = {
+    "process_manage": ("action", {
+        "write": ActionTier.EXECUTION,
+        "submit": ActionTier.EXECUTION,
+        "handoff": ActionTier.EXECUTION,
+    }),
+}
 
 HOST_TOOL_TIER: Dict[str, ActionTier] = {
     **{name: ActionTier.EXECUTION for name in _EXECUTION},
