@@ -6,6 +6,13 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-12
+
+**The gaps the benchmark measured in 0.4.4, closed.** Attacks through
+covered sources: 2,520 of 2,520 stopped (was 1,728 of 1,920). InjecAgent
+delivered as a web page: 1,054 of 1,054 (was 561). Everyday work: no extra
+questions.
+
 ### Fixed
 
 - **Input to a running process is asked about after a web read** ([#43]).

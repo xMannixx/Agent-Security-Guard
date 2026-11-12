@@ -28,14 +28,19 @@ turning into an action — with fixed rules, not a second model guessing.
 In the [benchmark](https://github.com/xMannixx/Agent-Security-Guard/tree/main/benchmarks), every attack assumes a model that does exactly what
 the page says:
 
-- **1,728 of 1,920 attacks on Hermes's own tools** through a web page, search,
-  X or the browser are stopped before the tool runs (90 %).
+- **All 2,520 attacks on Hermes's own tools** through a web page, search, X,
+  the browser or a `curl` in the terminal are stopped before the tool runs.
+  This includes a page that has the browser tool fill a bank form or run a
+  shell command, and input typed into a running shell.
+- **All 1,054 [InjecAgent](https://github.com/uiuc-kang-lab/InjecAgent) cases**
+  delivered as a web page are stopped, also those aimed at third-party (MCP)
+  tools such as a bank's or a smart lock's.
 - **The wording makes no difference.** Each of 24 phrasings is stopped
   equally often: polite, hidden, in German, base64 or with zero-width
   characters.
-- **Everyday work is not interrupted.** 0 of 24 everyday tasks are asked
+- **Everyday work is not interrupted.** 0 of 35 everyday tasks are asked
   about, unless outside content and an action meet in the same turn.
-- **About 0.1 ms per tool call.**
+- **About 0.15 ms per tool call.**
 
 What it does not stop is listed there too.
 
@@ -89,12 +94,17 @@ one in your home, so an agent cannot switch its own guard off.
 - **Messaging tools are not treated as sending out.** `send_message` is how
   Hermes answers you, so it is audited, not stopped — also when the text holds
   a secret.
-- **Browser actions and input to a running process are not told apart from
-  reading.** `browser_exec` reads and acts, `process_manage` mostly reads; both
-  stay free after outside content.
-- **Third-party tools it does not know** (MCP tools such as a bank's or a smart
-  lock's) stay free after outside content. Declare them in `tool_tiers`, or run
-  `mode: strict`.
+- **Third-party (MCP) tools are judged by what their server declares.** A
+  tool that does not declare itself read-only is asked about after outside
+  content; one that does stays free, even if the server says so wrongly.
+  What an MCP tool returns counts as outside content only for servers you
+  mark `trust: untrusted` in Hermes's config (or list in
+  `untrusted_content_tools`).
+- **A downloaded file is outside content only if you say where downloads
+  live** (`untrusted_paths`, e.g. `~/Downloads/`).
+- **The browser tool's code is judged by an allow-list**, not run. Code that
+  uses something the list does not know is asked about after outside content,
+  like a shell command.
 - It is **not a sandbox.** It decides before a call; it does not contain what
   an approved command does.
 - One audit trail per OS user: Hermes profiles each read their own
@@ -103,5 +113,5 @@ one in your home, so an agent cannot switch its own guard off.
 
 ## More
 
-Full documentation, the rule set, the audit trail and the 1,300+ tests:
+Full documentation, the rule set, the audit trail and the 1,400+ tests:
 <https://github.com/xMannixx/Agent-Security-Guard>. MIT licensed.

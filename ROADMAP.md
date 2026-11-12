@@ -108,28 +108,28 @@ A benchmark of what the guard stops and what it costs (`benchmarks/`). It
 found three Hermes tools the guard did not know: a scheduled job, a subagent
 and desktop control now count as execution.
 
-## Next: close the gaps the benchmark measured
+## 0.5.0 — The measured gaps, closed (done)
 
-Each item has a number from [`benchmarks/`](benchmarks/) to beat, and an
-issue on GitHub. The numbers are for the policy as shipped (0.4.4), with a
-model that does whatever the injected text says. Milestone:
-[0.5.0](https://github.com/xMannixx/Agent-Security-Guard/milestone/1).
+Items 1 to 5 of the list the 0.4.4 benchmark produced, each with its number:
 
-| # | Gap | Today | Target | Issue |
-|---|---|---|---|---|
-| 1 | **Write-capable third-party (MCP) tools after outside content.** Use the MCP `readOnlyHint` Hermes already records: write-capable tools are asked about, read-only ones stay free. | InjecAgent via web page 561 / 1,054 | ≥ 1,000 / 1,054, everyday tasks unchanged | [#39](https://github.com/xMannixx/Agent-Security-Guard/issues/39) |
-| 2 | **MCP tool results as outside content**, for servers Hermes marks `trust: untrusted` or tools with `openWorldHint`. | MCP mail source 96 / 480 | ≥ 432 / 480 | [#40](https://github.com/xMannixx/Agent-Security-Guard/issues/40) |
-| 3 | **Files and shell output from outside:** the output of `curl`, `wget` or `git clone`, and an operator list of paths such as `~/Downloads/**`. | 96 / 480 each | ≥ 432 / 480 each | [#41](https://github.com/xMannixx/Agent-Security-Guard/issues/41) |
-| 4 | **Browser actions:** `browser_exec` filling or clicking after outside content is asked about; navigating and reading stay free. | 0 / 96 | 96 / 96 | [#42](https://github.com/xMannixx/Agent-Security-Guard/issues/42) |
-| 5 | **Input to a running process:** `process_manage` classified by its `action` (`write` / `submit` is execution, `poll` / `log` is a read). | 0 / 96 | 96 / 96 | [#43](https://github.com/xMannixx/Agent-Security-Guard/issues/43) |
-| 6 | **A known secret in a chat message** (optional): `send_message` stays free, but not with a recognized secret in it. | 0 / 96 | setting, both states measured | [#44](https://github.com/xMannixx/Agent-Security-Guard/issues/44) |
-| 7 | **Benchmark with a real model:** attack success with and without the guard in a real Hermes session. | not measured | `benchmarks/live/` | [#45](https://github.com/xMannixx/Agent-Security-Guard/issues/45) |
-| 8 | **Fewer questions when research and action meet in one turn**, the design's main cost. Ideas are measured, not decided. | 4 / 4 such tasks asked | fewer, attack numbers unchanged | [#46](https://github.com/xMannixx/Agent-Security-Guard/issues/46) |
+| Gap | 0.4.4 | 0.5.0 | Issue |
+|---|---|---|---|
+| Write-capable third-party (MCP) tools after outside content: Hermes's `readOnlyHint` decides | InjecAgent via web page 561 / 1,054 | **1,054 / 1,054** | [#39](https://github.com/xMannixx/Agent-Security-Guard/issues/39) |
+| MCP results as outside content, for servers marked `trust: untrusted` in Hermes | MCP mail 96 / 504 | **504 / 504** with the server marked | [#40](https://github.com/xMannixx/Agent-Security-Guard/issues/40) |
+| Output of `curl`, `wget`, `git clone`; files under `untrusted_paths` | 96 / 504 each | **504 / 504** each (paths: with `~/Downloads/` listed) | [#41](https://github.com/xMannixx/Agent-Security-Guard/issues/41) |
+| Browser actions: `browser_exec` judged by its code | 0 / 96 | **96 / 96**, plus a shell command through the browser tool 96 / 96 | [#42](https://github.com/xMannixx/Agent-Security-Guard/issues/42) |
+| Input to a running process: `process_manage` by its `action` | 0 / 96 | **96 / 96** | [#43](https://github.com/xMannixx/Agent-Security-Guard/issues/43) |
 
-Items 4 and 5 would take the attacks through web, search, X and browser from
-1,728 / 1,920 to all 1,920. Items 2 and 3 do the same for files, shell output
-and MCP results, and item 1 for third-party tools. Each one ships only if the
-everyday tasks stay as they are.
+Everyday tasks: 0 of 35 asked (was 0 of 24; the new ones use the browser,
+running processes, MCP tools, curl and git clone).
+
+## Next
+
+| Gap | Today | Target | Issue |
+|---|---|---|---|
+| **A known secret in a chat message** (optional): `send_message` stays free, but not with a recognized secret in it. | 0 / 96 | setting, both states measured | [#44](https://github.com/xMannixx/Agent-Security-Guard/issues/44) |
+| **Benchmark with a real model:** attack success with and without the guard in a real Hermes session, with free OpenRouter models and local abliterated ones. | not measured | `benchmarks/live/` | [#45](https://github.com/xMannixx/Agent-Security-Guard/issues/45) |
+| **Fewer questions when research and action meet in one turn**, the design's main cost. Ideas are measured, not decided. | 7 / 7 such tasks asked | fewer, attack numbers unchanged | [#46](https://github.com/xMannixx/Agent-Security-Guard/issues/46) |
 
 ## Later
 
