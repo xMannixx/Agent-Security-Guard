@@ -17,7 +17,6 @@ pytestmark = pytest.mark.skipif(not BENCH.is_file(), reason="not inside the repo
 
 # Known and documented in benchmarks/README.md; anything else must be stopped.
 NOT_STOPPED = {
-    "act later or elsewhere / browser action",
     "message someone / chat message",
 }
 
