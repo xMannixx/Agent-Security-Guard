@@ -6,6 +6,18 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Input to a running process is asked about after a web read** ([#43]).
+  `process_manage` is judged by its `action`: `write` and `submit` type into
+  a shell that is already running and `handoff` passes the process on, so
+  after outside content in the turn they go to Hermes's approval prompt like
+  `terminal`. `list`, `poll`, `log`, `wait`, `kill` and `close` stay free.
+  Benchmark: "input to a running process" 96 / 96 stopped (was 0 / 96); two
+  new everyday tasks that start a server and read its log are not asked about.
+
+[#43]: https://github.com/xMannixx/Agent-Security-Guard/issues/43
+
 ## [0.4.4] - 2026-11-10
 
 **Work handed on after a web read is asked about.** Found by the new

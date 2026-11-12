@@ -15,7 +15,7 @@ import re
 from typing import Any, Iterator, List, Optional
 from urllib.parse import unquote, urlsplit
 
-from .host_tools import HOST_TOOL_TIER, UNTRUSTED_CONTENT_TOOLS
+from .host_tools import HOST_TOOL_TIER, TIER_BY_ACTION, UNTRUSTED_CONTENT_TOOLS
 from .types import ActionTier, AgentAction, GuardConfig
 
 
@@ -105,6 +105,8 @@ def classify_action(
     tier = _KIND_TIER.get(kind)
     if tier is None:
         tier = _host_tool_tier(kind)
+    if tier is None:
+        tier = _tier_by_action(kind, action)
     if tier is not None:
         return _read_tier_for_target(tier, action.target)
 
@@ -254,7 +256,7 @@ def recognized_by_name_only(
         return False
     if kind in _KIND_TIER or kind in _GENERIC_HTTP_KINDS:
         return False
-    return _host_tool_tier(kind) is not None
+    return _host_tool_tier(kind) is not None or _tier_by_action(kind, action) is not None
 
 
 def _kind(action: AgentAction) -> str:
@@ -264,6 +266,23 @@ def _kind(action: AgentAction) -> str:
 def _declared_tier(kind: str, config: Optional[GuardConfig]) -> Optional[ActionTier]:
     declared = config.tool_tiers.get(kind) if config and config.tool_tiers else None
     return ActionTier(declared) if declared is not None else None
+
+
+def _tier_by_action(kind: str, action: AgentAction) -> Optional[ActionTier]:
+    """Tier of a host tool that acts only for some values of one argument.
+
+    Matched by exact name: these are a host's own tools, whose arguments the
+    host defines. The value is compared lowercased and stripped; any other
+    value, or none, leaves the call unrecognized.
+    """
+    rule = TIER_BY_ACTION.get(kind)
+    if rule is None:
+        return None
+    key, tiers = rule
+    value = (action.metadata or {}).get(key)
+    if not isinstance(value, str):
+        return None
+    return tiers.get(value.strip().lower())
 
 
 def _host_tool_tier(kind: str) -> Optional[ActionTier]:

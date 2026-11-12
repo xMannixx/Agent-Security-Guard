@@ -594,3 +594,20 @@ def test_the_hermes_home_follows_the_active_profile(isolated_plugin, monkeypatch
 
     monkeypatch.setitem(sys.modules, "hermes_constants", None)  # outside Hermes
     assert isolated_plugin._hermes_home() == Path.home() / ".hermes"
+
+
+def test_degraded_fallback_covers_tools_that_act_by_argument(monkeypatch):
+    # Same promise for the tools the engine tells apart by one argument.
+    from types import SimpleNamespace
+
+    from agent_security_guard import is_state_changing
+    from agent_security_guard.host_tools import TIER_BY_ACTION
+
+    monkeypatch.setattr(guard_plugin, "GuardAdapter", None)
+    for kind, (key, tiers) in TIER_BY_ACTION.items():
+        for value, tier in tiers.items():
+            action = SimpleNamespace(kind=kind, metadata={key: value})
+            assert guard_plugin._blocked_while_degraded(action) is is_state_changing(tier), (kind, value)
+    assert not guard_plugin._blocked_while_degraded(
+        SimpleNamespace(kind="process_manage", metadata={"action": "poll"})
+    )

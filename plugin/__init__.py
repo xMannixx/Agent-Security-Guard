@@ -627,6 +627,19 @@ _STATE_CHANGING_KIND_NAMES = frozenset({
 })
 
 
+# Host tools that act only for some values of one argument (the engine's
+# TIER_BY_ACTION): process_manage types into a running shell with these.
+_STATE_CHANGING_ACTIONS = {"process_manage": ("action", frozenset({"write", "submit", "handoff"}))}
+
+
+def _acts_by_argument(kind: str, metadata: Any) -> bool:
+    rule = _STATE_CHANGING_ACTIONS.get(kind)
+    if rule is None or not isinstance(metadata, dict):
+        return False
+    value = metadata.get(rule[0])
+    return isinstance(value, str) and value.strip().lower() in rule[1]
+
+
 def _blocked_while_degraded(action) -> bool:
     """Whether an action the engine could not evaluate is held back.
 
@@ -637,6 +650,8 @@ def _blocked_while_degraded(action) -> bool:
     """
     kind = str(getattr(action, "kind", "") or "").strip().lower()
     if _is_dangerous_by_name(kind) or kind in _STATE_CHANGING_KIND_NAMES:
+        return True
+    if _acts_by_argument(kind, getattr(action, "metadata", None)):
         return True
     if GuardAdapter is None:
         return False
