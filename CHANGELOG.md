@@ -6,6 +6,31 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-12
+
+**Public Hermes surfaces only.** 0.5.0 read Hermes's private MCP registry
+(`tools.mcp_tool`, `tools.mcp_tool_schema`, `tools.mcp_tool_scope`) to learn
+which MCP tools declare `readOnlyHint` and which servers are marked
+`trust: untrusted`. Hermes's plugin catalog allows public surfaces only, and
+no public surface carries these facts yet. 0.5.1 no longer reads them.
+
+### Changed
+
+- **MCP tools are treated as in 0.4.4.** A third-party tool the guard does
+  not know stays free after outside content unless it is declared in
+  `tool_tiers` or `mode: strict` is set; its results are outside content when
+  it is listed in `untrusted_content_tools`. Benchmark, policy as shipped:
+  InjecAgent delivered as a web page 561 / 1,054 (0.5.0: 1,054), delivered
+  by MCP 33 / 1,054 (0.5.0: 62). `mode: strict`: 1,054 / 1,054 each.
+- **`mcp_hints` is retired.** It is still accepted, so a guard.yaml from
+  0.5.0 loads, but it has no effect.
+
+Everything else from 0.5.0 stays: `browser_exec` judged by its code,
+`process_manage` by its action, the output of `curl` / `wget` / `git clone`
+from another host and files under `untrusted_paths` as outside content.
+Attacks on Hermes's own tools through covered sources: 2,520 / 2,520.
+
+
 ## [0.5.0] - 2026-11-12
 
 **The gaps the benchmark measured in 0.4.4, closed.** Attacks through

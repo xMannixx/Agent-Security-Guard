@@ -19,7 +19,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.8%2B-blue.svg" alt="Python 3.8+"></a>
   <img src="https://img.shields.io/badge/deps-stdlib%20only-success.svg" alt="Dependencies: stdlib only">
-  <img src="https://img.shields.io/badge/tests-1447%20passing-success.svg" alt="Tests: 1447 passing">
+  <img src="https://img.shields.io/badge/tests-1438%20passing-success.svg" alt="Tests: 1438 passing">
 </p>
 
 <p align="center">
@@ -29,9 +29,11 @@
 
 **[Benchmark](benchmarks/):** all 2,520 attacks on Hermes's own tools
 stopped, whatever their wording; text filtering on the same pages recognizes
-16.7 %. All 1,054 public cases of
+16.7 %. Of the 1,054 public cases of
 [InjecAgent](https://github.com/uiuc-kang-lab/InjecAgent) (Zhan et al., UIUC,
-ACL 2024) stopped when delivered as a web page. 0 of 35 everyday tasks
+ACL 2024) delivered as a web page, 561 stopped as shipped and all 1,054 with
+`mode: strict`; the rest aim at third-party (MCP) tools the guard does not
+know by name. 0 of 35 everyday tasks
 interrupted, 0.15 ms per call. What it does not stop is measured and listed
 too, and each gap has a target in the [roadmap](ROADMAP.md).
 
@@ -377,11 +379,18 @@ No runtime dependencies — pure stdlib. `pytest` only for development.
 
 ## Status & roadmap
 
+v0.5.1 — uses public Hermes surfaces only, as the plugin catalog requires. The
+MCP part of 0.5.0 read Hermes's private registry and is taken out: MCP tools
+are treated as in 0.4.4 again (declare them in `tool_tiers`, list them in
+`untrusted_content_tools`, or run `mode: strict`). InjecAgent via web page:
+561 of 1,054 as shipped, 1,054 with `mode: strict`. Everything else from
+0.5.0 stays: attacks through covered sources 2,520 of 2,520 stopped.
+
 v0.5.0 — closes the gaps the benchmark measured in 0.4.4. The browser tool is
 judged by the code it runs (reading stays free; filling a form or running a
 shell command after a web read is asked about). Typing into a running process,
-third-party (MCP) tools that do not declare themselves read-only, and the
-output of `curl` or `git clone` are covered too, and `untrusted_paths` marks a
+third-party (MCP) tools that do not declare themselves read-only (taken out
+again in 0.5.1), and the output of `curl` or `git clone` are covered too, and `untrusted_paths` marks a
 download folder as outside content. Attacks through covered sources: 2,520 of
 2,520 stopped (was 1,728 of 1,920); InjecAgent via web page 1,054 of 1,054
 (was 561). Everyday work: still no extra questions.

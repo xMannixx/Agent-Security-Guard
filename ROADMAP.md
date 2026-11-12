@@ -123,6 +123,13 @@ Items 1 to 5 of the list the 0.4.4 benchmark produced, each with its number:
 Everyday tasks: 0 of 35 asked (was 0 of 24; the new ones use the browser,
 running processes, MCP tools, curl and git clone).
 
+## 0.5.1 — Public Hermes surfaces only (done)
+
+The MCP rows above (#39, #40) read Hermes's private MCP registry. The plugin
+catalog allows public surfaces only, so 0.5.1 takes them out: InjecAgent via
+web page 561 / 1,054 again as shipped (1,054 with `mode: strict`). They come
+back once Hermes offers `readOnlyHint` and server trust on a public surface.
+
 ## Next
 
 | Gap | Today | Target | Issue |

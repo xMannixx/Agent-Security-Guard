@@ -284,15 +284,8 @@ class GuardConfig:
     # Whether the plugin wraps those results as data blocks (Hermes:
     # transform_tool_result).
     wrap_tool_results: bool = True
-    # Use what the host knows about its third-party (MCP) tools: a tool its
-    # server does not declare read-only is an external write, and the results
-    # of a server the operator marked untrusted are outside content.
+    # Retired in 0.5.1: accepted so a 0.5.0 guard.yaml still loads, no effect.
     mcp_hints: bool = True
-    # Tiers the host's own facts give its tools for this call (the plugin
-    # fills it from Hermes's MCP readOnlyHint). Unlike ``tool_tiers`` these
-    # are the guard's reading, not the operator's word: they count as
-    # recognized by name, gated only when something points at danger.
-    host_tool_tiers: Dict[str, str] = field(default_factory=dict)
     # Operator-declared memory lane names: {lane name: one of the five lanes}.
     memory_lanes: Dict[str, str] = field(default_factory=dict)
 
