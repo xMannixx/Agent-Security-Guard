@@ -184,6 +184,15 @@ untrusted_content_tools:
 # (Hermes: transform_tool_result). Not done in monitor mode.
 wrap_tool_results: true
 
+# Use what Hermes knows about its third-party (MCP) tools. Hermes records
+# whether each tool declares itself read-only (readOnlyHint) and whether you
+# marked its server `trust: untrusted` in Hermes's own config.
+# - A tool that does not declare itself read-only is an external write: once
+#   outside content is in the turn, it goes to the approval prompt.
+#   (A tool you list in tool_tiers keeps your tier.)
+# - What a tool of an untrusted server returns is outside content, like a page.
+mcp_hints: true
+
 # Writing one of these with a file tool changes the agent's own future
 # behavior, so it is held to the self-modification bar (explicit user order,
 # never a direct allow) instead of being treated as a plain file write. Same

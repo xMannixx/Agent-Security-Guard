@@ -192,6 +192,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # Off by default because natural phrasing ("ok", "nur lesen") otherwise
     # denied every state-changing action.
     "scope_from_text": False,
+    # Use the host's MCP facts (Hermes: readOnlyHint, trust: untrusted).
+    "mcp_hints": True,
     "limits": {
         "max_content_chars": 20000,
         "max_history_events": 50,
@@ -254,6 +256,7 @@ def load_config(path: Optional[str] = None) -> GuardConfig:
             for pattern in _texts(merged.get("untrusted_content_tools"))
         ],
         wrap_tool_results=config_check.as_bool(merged.get("wrap_tool_results", True)),
+        mcp_hints=config_check.as_bool(merged.get("mcp_hints", True)),
         memory_lanes=validated_memory_lanes(merged.get("memory_lanes")),
     )
 
@@ -300,6 +303,7 @@ def _deep_copy_defaults() -> Dict[str, Any]:
         "self_modification_paths": list(DEFAULT_CONFIG["self_modification_paths"]),
         "untrusted_content_tools": list(DEFAULT_CONFIG["untrusted_content_tools"]),
         "wrap_tool_results": DEFAULT_CONFIG["wrap_tool_results"],
+        "mcp_hints": DEFAULT_CONFIG["mcp_hints"],
         "memory_lanes": dict(DEFAULT_CONFIG["memory_lanes"]),
     }
 

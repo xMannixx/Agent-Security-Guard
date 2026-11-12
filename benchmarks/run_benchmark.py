@@ -31,16 +31,37 @@ REPO = HERE.parent
 
 POLICIES = {
     "default": "the policy as shipped (mode autonomous-safe)",
+    "no-hints": "as shipped, with `mcp_hints: false` (the guard before 0.5.0 for MCP tools)",
+    "mcp-untrusted": "as shipped, the MCP servers marked `trust: untrusted` in Hermes's config",
     "mcp-listed": "as shipped, plus `mcp__*` in untrusted_content_tools (one line)",
     "strict": "as shipped, with `mode: strict`",
 }
+
+# What Hermes records when it connects an MCP server (tools/mcp_tool.py): the
+# readOnlyHint each tool declares and the server's trust. Simulated here: a
+# tool whose name starts with a reading verb declares itself read-only, as a
+# well-behaved server would; every other tool declares nothing, which Hermes
+# and the guard count as write-capable.
+_READ_VERBS = ("get", "read", "search", "list", "view", "fetch", "find", "check",
+               "query", "retrieve", "show", "lookup", "browse", "describe", "count")
+
+
+def _simulated_mcp_facts(untrusted_servers: bool):
+    def facts(tool_name: str):
+        if not tool_name.startswith("mcp__"):
+            return None
+        verb = tool_name.split("__")[-1].split("_")[0]
+        return verb in _READ_VERBS, untrusted_servers
+    return facts
 
 
 # --- One policy, in its own process -----------------------------------------
 
 def _policy_text(name: str) -> str:
     text = (REPO / "guard.yaml").read_text(encoding="utf-8")
-    if name == "mcp-listed":
+    if name == "no-hints":
+        text = re.sub(r"^mcp_hints: true$", "mcp_hints: false", text, count=1, flags=re.MULTILINE)
+    elif name == "mcp-listed":
         text = text.replace("untrusted_content_tools:\n", 'untrusted_content_tools:\n  - "mcp__*"\n', 1)
     elif name == "strict":
         text = re.sub(r"^mode: autonomous-safe$", "mode: strict", text, count=1, flags=re.MULTILINE)
@@ -99,6 +120,7 @@ def run_one_policy(policy: str, quick: bool) -> Dict[str, Any]:
     import scenarios  # noqa: E402
 
     guard_plugin._SYSTEM_CONFIG = Path(os.environ["HOME"]) / "no-etc" / "guard.yaml"
+    guard_plugin._mcp_facts = _simulated_mcp_facts(untrusted_servers=policy == "mcp-untrusted")
     status = guard_plugin.guard_status()
     assert status["available"], status
     from agent_security_guard.scanner import scan_input  # noqa: E402  (the copy the plugin loaded)
@@ -339,9 +361,10 @@ def render_markdown(results: Dict[str, Dict[str, Any]], meta: Dict[str, Any]) ->
         row = [goal] + [_pct(results[p]["summary"]["by_goal_covered"][goal]) for p in results]
         row.append(_pct(d["by_goal"][goal]))
         lines.append("| " + " | ".join(row) + " |")
-    lines += ["", "## By source (policy as shipped, chat messages left out)", "", "| Source | Stopped |", "|---|---|"]
-    for source, share in d["by_source"].items():
-        lines.append(f"| {source} | {_pct(share)} |")
+    lines += ["", "## By source (chat messages left out)", "",
+              "| Source | " + " | ".join(results) + " |", "|---|" + "---|" * len(results)]
+    for source in d["by_source"]:
+        lines.append(f"| {source} | " + " | ".join(_pct(results[p]["summary"]["by_source"][source]) for p in results) + " |")
     lines += ["", "## Wording does not matter to the guard, it does to a text filter", "",
               "Covered sources, policy as shipped. Text filter = the guard's own injection patterns "
               "applied to the page (it does not decide anything in the guard; shown for comparison).", "",
