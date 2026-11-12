@@ -126,3 +126,24 @@ def test_scope_detection_is_linear(text):
 )
 def test_scope_across_line_breaks_is_still_found(message):
     assert detect_no_write_scope(message) is True
+
+
+# --- network fetches in a shell command (every terminal call) ---------------
+
+from agent_security_guard.actions import _CLONE_COMMAND, _FETCH_CODE, _fetch_command  # noqa: E402
+
+FETCH_INPUTS = {
+    "many fetchers": "curl a " * (N // 7 + 1),
+    "options with values": "curl -o " * (N // 8 + 1),
+    "dotted word": "curl " + "a." * N + "1",
+    "long host": "curl https://" + "a" * N + ".example/",
+    "spaces": "curl" + " " * N + "x",
+    "many lines": ("curl " + " " * 400 + "a\n") * 60,
+    "clone spaces": "git" + " " * N + "x",
+    "code dots": "requests" + "." * N,
+}
+
+
+@pytest.mark.parametrize("text", FETCH_INPUTS.values(), ids=FETCH_INPUTS.keys())
+def test_fetch_detection_is_linear(text):
+    _assert_fast(lambda t: (_fetch_command(t), _CLONE_COMMAND.search(t), _FETCH_CODE.search(t)), text)

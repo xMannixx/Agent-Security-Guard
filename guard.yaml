@@ -162,8 +162,8 @@ memory_lanes: {}
 # the tool name). Their results are wrapped as data, and after one of them the
 # `after_untrusted_content` rule above applies for the rest of the chain. What
 # goes into such a tool goes outside too, so all of its arguments are checked
-# for secrets. Any
-# read of a remote URL counts as well. Add your own, e.g. "mcp_*" or an email
+# for secrets. Any read of a remote URL counts as well, and so does the output
+# of a shell command that fetches from another host (curl, wget, git clone). Add your own, e.g. "mcp_*" or an email
 # reader. This list replaces the built-in one, so keep what you still want.
 untrusted_content_tools:
   - "web_fetch"
@@ -179,6 +179,14 @@ untrusted_content_tools:
   - "scrape"
   - "browser"
   - "browser_*"
+
+# Files that count as outside content when read: a download folder, a
+# checkout of someone else's repository. A pattern ending in `/` is a
+# directory (everything under it); others are globs over the whole path.
+# `~` is your home. Empty by default. Example:
+#   untrusted_paths:
+#     - "~/Downloads/"
+untrusted_paths: []
 
 # Wrap the results of those tools as data blocks before they reach the model
 # (Hermes: transform_tool_result). Not done in monitor mode.

@@ -278,6 +278,9 @@ class GuardConfig:
     # Glob patterns for tools whose result is content from outside (web pages,
     # search results). Their results are wrapped as data and taint the chain.
     untrusted_content_tools: List[str] = field(default_factory=list)
+    # Paths whose files count as outside content when read (a download
+    # folder, a checkout of someone else's repository). Empty by default.
+    untrusted_paths: List[str] = field(default_factory=list)
     # Whether the plugin wraps those results as data blocks (Hermes:
     # transform_tool_result).
     wrap_tool_results: bool = True

@@ -51,6 +51,20 @@ project adheres to [Semantic Versioning](https://semver.org/).
   New everyday tasks with read-only and write-capable MCP tools: not asked,
   except reading a page and writing to Notion in one turn (by design).
 
+- **Shell output from another host, and files from outside** ([#41]).
+  - The output of a command that fetches from another host (`curl`,
+    `wget`, `http`, ... pointed at a host that is not this machine;
+    `git clone`; code that calls `requests`, `urllib`, `httpx`) is outside
+    content: wrapped as data, and the rest of the turn is gated like after
+    a web page. `curl localhost` stays local.
+  - New `untrusted_paths` in guard.yaml (empty by default, e.g.
+    `~/Downloads/`): files read from there are outside content too.
+  Benchmark: shell output 504 / 504 stopped (was 96); downloaded file
+  504 / 504 with `~/Downloads/` listed (was 96). New everyday tasks (curl to
+  localhost, clone and read a repository, clone then test next turn) are not
+  asked about; clone and run its tests in one turn is (by design).
+
+[#41]: https://github.com/xMannixx/Agent-Security-Guard/issues/41
 [#39]: https://github.com/xMannixx/Agent-Security-Guard/issues/39
 [#40]: https://github.com/xMannixx/Agent-Security-Guard/issues/40
 [#42]: https://github.com/xMannixx/Agent-Security-Guard/issues/42

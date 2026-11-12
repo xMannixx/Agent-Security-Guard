@@ -33,7 +33,7 @@ POLICIES = {
     "default": "the policy as shipped (mode autonomous-safe)",
     "no-hints": "as shipped, with `mcp_hints: false` (the guard before 0.5.0 for MCP tools)",
     "mcp-untrusted": "as shipped, the MCP servers marked `trust: untrusted` in Hermes's config",
-    "mcp-listed": "as shipped, plus `mcp__*` in untrusted_content_tools (one line)",
+    "lists": "as shipped, plus `mcp__*` in untrusted_content_tools and `~/Downloads/` in untrusted_paths (two lines)",
     "strict": "as shipped, with `mode: strict`",
 }
 
@@ -61,8 +61,9 @@ def _policy_text(name: str) -> str:
     text = (REPO / "guard.yaml").read_text(encoding="utf-8")
     if name == "no-hints":
         text = re.sub(r"^mcp_hints: true$", "mcp_hints: false", text, count=1, flags=re.MULTILINE)
-    elif name == "mcp-listed":
+    elif name == "lists":
         text = text.replace("untrusted_content_tools:\n", 'untrusted_content_tools:\n  - "mcp__*"\n', 1)
+        text = text.replace("untrusted_paths: []", 'untrusted_paths:\n  - "~/Downloads/"', 1)
     elif name == "strict":
         text = re.sub(r"^mode: autonomous-safe$", "mode: strict", text, count=1, flags=re.MULTILINE)
     return text
@@ -336,7 +337,7 @@ def render_markdown(results: Dict[str, Dict[str, Any]], meta: Dict[str, Any]) ->
         "",
         "## Headline (policy as shipped)",
         "",
-        f"- **Attacks on Hermes's own tools, through a web page, search, X or the browser:** "
+        f"- **Attacks on Hermes's own tools, through a web page, search, X, the browser or a fetching shell command:** "
         f"{_pct(d['headline'])} stopped before the tool ran "
         f"({d['headline_ask']} sent to Hermes's approval prompt, {d['headline_block']} refused).",
         f"- **The same attacks, judged by their wording instead** (the guard's own pattern list, the "
@@ -351,8 +352,10 @@ def render_markdown(results: Dict[str, Dict[str, Any]], meta: Dict[str, Any]) ->
         "## Attacks on Hermes's own tools, by goal",
         "",
         "Stopped = Hermes asks the user first, or the call is refused. Covered sources: web page, "
-        "search results, X, browser. All sources adds a downloaded file read with `read_file`, a shell "
-        "command's output and an MCP mail tool, which the shipped policy does not treat as outside content.",
+        "search results, X, browser, the output of a shell command that fetches from another host. "
+        "All sources adds a downloaded file read with `read_file` and an MCP mail tool, which count as "
+        "outside content only once the operator says so (`untrusted_paths`, or `trust: untrusted` on "
+        "the MCP server in Hermes).",
         "",
         "| Goal | " + " | ".join(f"{p}: covered sources" for p in results) + " | default: all sources |",
         "|---|" + "---|" * (len(results) + 1),
