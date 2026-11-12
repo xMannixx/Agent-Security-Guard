@@ -24,7 +24,7 @@ from .modes import is_known_mode
 
 STRING_LISTS = (
     "domain_allowlist", "sensitive_paths", "secret_patterns",
-    "self_modification_paths", "untrusted_content_tools",
+    "self_modification_paths", "untrusted_content_tools", "untrusted_paths",
 )
 BOOLEANS = ("scope_from_text", "wrap_tool_results", "mcp_hints")
 ON_ERROR = ("degrade", "deny_all")

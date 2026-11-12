@@ -11,6 +11,8 @@ from __future__ import annotations
 import dataclasses
 import fnmatch
 import json
+import os
+import posixpath
 import re
 from typing import Any, Iterator, List, Optional
 from urllib.parse import unquote, urlsplit
@@ -189,10 +191,113 @@ def brings_untrusted_content(
     """
     if _talks_to_the_outside(action, config):
         return True
-    return (
-        classify_action(action, config) is ActionTier.READ_ONLY
-        and _is_remote(action.target)
-    )
+    tier = classify_action(action, config)
+    if tier is ActionTier.READ_ONLY and _is_remote(action.target):
+        return True
+    if tier is ActionTier.EXECUTION and _fetches_from_the_network(action):
+        return True
+    return tier is ActionTier.LOCAL_READ and _in_untrusted_path(action.target, config)
+
+
+# A command whose output is what a server sent: curl/wget and friends pointed
+# at a host that is not this machine, or a clone of someone else's repository.
+# Its output, like a page, may be what proposes the next action. Read by
+# splitting into words, not by one pattern, so a long command is linear.
+_FETCHERS = frozenset({
+    "curl", "wget", "aria2c", "http", "https", "xh", "httpie", "lynx", "w3m",
+    "links", "elinks",
+})
+# Options whose value is not the address (``curl -o out.json URL``).
+_OPTIONS_WITH_A_VALUE = frozenset({
+    "-o", "--output", "-d", "--data", "--data-raw", "--data-binary", "-H",
+    "--header", "-u", "--user", "-A", "--user-agent", "-e", "--referer", "-K",
+    "--config", "-T", "--upload-file", "-x", "--proxy", "-X", "--request",
+    "-O", "--output-document", "-P", "--directory-prefix", "--header=",
+})
+_SEGMENT_BREAK = re.compile(r"[;&|\n`()]|\$\(")
+_HOST = re.compile(r"[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}", re.IGNORECASE)
+_LOCAL_HOSTS = frozenset({"localhost", "0.0.0.0", "::1", "[::1]"})
+_CLONE_COMMAND = re.compile(
+    r"(?:^|[\s;&|(`])(?:git\s+clone|gh\s+repo\s+clone|svn\s+(?:checkout|co))\s",
+    re.IGNORECASE,
+)
+# Code that fetches a URL: requests, httpx, urllib, aiohttp, fetch().
+_FETCH_CODE = re.compile(
+    r"\b(?:requests|httpx|aiohttp)\.(?:get|post|request|Client|AsyncClient|ClientSession)\b"
+    r"|\burlopen\s*\(|\burllib\.request\b|\bfetch\s*\(\s*['\"`]https?://",
+)
+_COMMAND_KEYS = ("command", "cmd", "script", "code", "input")
+
+
+def _fetches_from_the_network(action: AgentAction) -> bool:
+    metadata = action.metadata or {}
+    for key in _COMMAND_KEYS:
+        for text in _strings(metadata.get(key)):
+            if _fetch_command(text) or _CLONE_COMMAND.search(text) or _FETCH_CODE.search(text):
+                return True
+    return False
+
+
+def _fetch_command(text: str) -> bool:
+    """One pass over the words: after a fetcher, its arguments are looked at
+    until the segment ends."""
+    for segment in _SEGMENT_BREAK.split(text):
+        fetching = skip = False
+        for word in segment.split():
+            if word.rsplit("/", 1)[-1].lower() in _FETCHERS:
+                fetching, skip = True, False
+            elif not fetching:
+                continue
+            elif skip:
+                skip = False
+            elif word.startswith("-"):
+                skip = word in _OPTIONS_WITH_A_VALUE
+            elif _remote_host(word):
+                return True
+    return False
+
+
+def _remote_host(word: str) -> bool:
+    """Whether a command word names a host other than this machine."""
+    word = word.strip("'\"")
+    if "://" in word:
+        try:
+            host = urlsplit(word).hostname or ""
+        except ValueError:
+            return True
+    else:
+        host = re.split(r"[/:?#]", word, maxsplit=1)[0]
+    host = host.lower()
+    if not host or host in _LOCAL_HOSTS or host.startswith("127."):
+        return False
+    return _HOST.fullmatch(host) is not None
+
+
+def _in_untrusted_path(target: str, config: Optional[GuardConfig]) -> bool:
+    """Whether a file lies under one of the operator's ``untrusted_paths``.
+
+    ``~`` is expanded in both. A pattern ending in ``/`` is a directory: a
+    path under it matches. Other patterns are globs over the whole path.
+    """
+    patterns = getattr(config, "untrusted_paths", None) if config is not None else None
+    if not patterns or not target or _is_remote(target):
+        return False
+    path = _normal_path(target)
+    for pattern in patterns:
+        wanted = _normal_path(pattern)
+        if pattern.rstrip().endswith(("/", "\\")):
+            if path.startswith(wanted.rstrip("/") + "/"):
+                return True
+        elif fnmatch.fnmatchcase(path, wanted):
+            return True
+    return False
+
+
+def _normal_path(value: str) -> str:
+    expanded = os.path.expanduser(str(value).strip()).replace("\\", "/")
+    trailing = expanded.endswith("/")
+    normal = posixpath.normpath(expanded)
+    return normal + "/" if trailing and not normal.endswith("/") else normal
 
 
 def _talks_to_the_outside(action: AgentAction, config: Optional[GuardConfig]) -> bool:

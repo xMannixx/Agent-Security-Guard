@@ -121,6 +121,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "memory_lanes": {},
     # Tools whose result is content from outside the machine (glob patterns).
     "untrusted_content_tools": list(UNTRUSTED_CONTENT_TOOLS),
+    "untrusted_paths": [],
     # The plugin wraps the results of those tools as data blocks.
     "wrap_tool_results": True,
     # Only true secret material. Broad developer-file globs (*.db, *.log,
@@ -255,6 +256,7 @@ def load_config(path: Optional[str] = None) -> GuardConfig:
             pattern.strip().lower()
             for pattern in _texts(merged.get("untrusted_content_tools"))
         ],
+        untrusted_paths=_texts(merged.get("untrusted_paths")),
         wrap_tool_results=config_check.as_bool(merged.get("wrap_tool_results", True)),
         mcp_hints=config_check.as_bool(merged.get("mcp_hints", True)),
         memory_lanes=validated_memory_lanes(merged.get("memory_lanes")),
@@ -302,6 +304,7 @@ def _deep_copy_defaults() -> Dict[str, Any]:
         "tool_tiers": dict(DEFAULT_CONFIG["tool_tiers"]),
         "self_modification_paths": list(DEFAULT_CONFIG["self_modification_paths"]),
         "untrusted_content_tools": list(DEFAULT_CONFIG["untrusted_content_tools"]),
+        "untrusted_paths": list(DEFAULT_CONFIG["untrusted_paths"]),
         "wrap_tool_results": DEFAULT_CONFIG["wrap_tool_results"],
         "mcp_hints": DEFAULT_CONFIG["mcp_hints"],
         "memory_lanes": dict(DEFAULT_CONFIG["memory_lanes"]),
