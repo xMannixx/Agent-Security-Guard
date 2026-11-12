@@ -16,6 +16,25 @@ project adheres to [Semantic Versioning](https://semver.org/).
   Benchmark: "input to a running process" 96 / 96 stopped (was 0 / 96); two
   new everyday tasks that start a server and read its log are not asked about.
 
+- **The browser tool is judged by the code it runs** ([#42]). Hermes's
+  `browser_exec` takes Python with browser helpers and the standard library,
+  so it reads pages, fills forms, and can run a shell command. The guard
+  parses the code (never runs it) and checks it against an allow-list:
+  - navigating, waiting and looking (`new_tab`, `goto_url`, `page_info`,
+    `js` with an expression that changes nothing, `cdp` methods that only
+    read) stays free;
+  - typing, clicking, key presses, uploads, and `js` / `cdp` calls not shown
+    to only read act on the page: after outside content in the turn they go
+    to Hermes's approval prompt;
+  - anything else (`os`, `subprocess`, `open`, imports beyond a few data
+    modules, `_` attributes, code that does not parse) counts as execution.
+  Benchmark: "browser action" 96 / 96 stopped (was 0 / 96), new goal "run a
+  command through the browser tool" 96 / 96; attacks through covered
+  sources 2016 / 2016. Everyday browsing, also several pages in one turn,
+  is not asked about; filling a form on a page read in the same turn is.
+  With the engine unavailable, every `browser_exec` call is held back.
+
+[#42]: https://github.com/xMannixx/Agent-Security-Guard/issues/42
 [#43]: https://github.com/xMannixx/Agent-Security-Guard/issues/43
 
 ## [0.4.4] - 2026-11-10

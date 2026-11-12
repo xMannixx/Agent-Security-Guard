@@ -15,7 +15,8 @@ import re
 from typing import Any, Iterator, List, Optional
 from urllib.parse import unquote, urlsplit
 
-from .host_tools import HOST_TOOL_TIER, TIER_BY_ACTION, UNTRUSTED_CONTENT_TOOLS
+from .browser_code import browser_code_tier
+from .host_tools import HOST_TOOL_TIER, TIER_BY_ACTION, TIER_BY_CODE, UNTRUSTED_CONTENT_TOOLS
 from .types import ActionTier, AgentAction, GuardConfig
 
 
@@ -269,12 +270,16 @@ def _declared_tier(kind: str, config: Optional[GuardConfig]) -> Optional[ActionT
 
 
 def _tier_by_action(kind: str, action: AgentAction) -> Optional[ActionTier]:
-    """Tier of a host tool that acts only for some values of one argument.
+    """Tier of a host tool that acts only for some values of one argument,
+    or by what the code it is given does.
 
     Matched by exact name: these are a host's own tools, whose arguments the
     host defines. The value is compared lowercased and stripped; any other
     value, or none, leaves the call unrecognized.
     """
+    code_key = TIER_BY_CODE.get(kind)
+    if code_key is not None:
+        return browser_code_tier((action.metadata or {}).get(code_key))
     rule = TIER_BY_ACTION.get(kind)
     if rule is None:
         return None

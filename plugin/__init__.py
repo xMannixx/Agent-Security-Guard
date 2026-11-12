@@ -632,7 +632,14 @@ _STATE_CHANGING_KIND_NAMES = frozenset({
 _STATE_CHANGING_ACTIONS = {"process_manage": ("action", frozenset({"write", "submit", "handoff"}))}
 
 
+# Tools judged by the code they run (the engine's TIER_BY_CODE). Without the
+# engine the code cannot be read, so every call is held back.
+_CODE_TOOLS = frozenset({"browser_exec"})
+
+
 def _acts_by_argument(kind: str, metadata: Any) -> bool:
+    if kind in _CODE_TOOLS:
+        return True
     rule = _STATE_CHANGING_ACTIONS.get(kind)
     if rule is None or not isinstance(metadata, dict):
         return False

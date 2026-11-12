@@ -104,6 +104,11 @@ TIER_BY_ACTION: Dict[str, Tuple[str, Dict[str, ActionTier]]] = {
     }),
 }
 
+# Tools that take code and are judged by what the code does
+# (browser_code.py): Hermes's ``browser_exec`` runs Python with browser
+# helpers, so one tool reads pages, fills forms and can run a shell command.
+TIER_BY_CODE: Dict[str, str] = {"browser_exec": "code"}
+
 HOST_TOOL_TIER: Dict[str, ActionTier] = {
     **{name: ActionTier.EXECUTION for name in _EXECUTION},
     **{name: ActionTier.LOCAL_WRITE for name in _LOCAL_WRITE},
