@@ -19,7 +19,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.8%2B-blue.svg" alt="Python 3.8+"></a>
   <img src="https://img.shields.io/badge/deps-stdlib%20only-success.svg" alt="Dependencies: stdlib only">
-  <img src="https://img.shields.io/badge/tests-1318%20passing-success.svg" alt="Tests: 1318 passing">
+  <img src="https://img.shields.io/badge/tests-1447%20passing-success.svg" alt="Tests: 1447 passing">
 </p>
 
 <p align="center">
@@ -27,13 +27,13 @@
   <sub>A real Hermes session, 50 s. <a href="docs/demo/agent-security-guard-demo.mp4">Video (MP4)</a> · <a href="https://x.com/Perry2096581714/status/2119758994139185266">on X</a></sub>
 </p>
 
-**[Benchmark](benchmarks/):** 1,728 of 1,920 attacks on Hermes's own tools
-stopped (90 %), whatever their wording; text filtering on the same pages
-recognizes 16.7 %. 0 of 24 everyday tasks interrupted, 0.1 ms per call.
-Also run against the 1,054 public cases of
+**[Benchmark](benchmarks/):** all 2,520 attacks on Hermes's own tools
+stopped, whatever their wording; text filtering on the same pages recognizes
+16.7 %. All 1,054 public cases of
 [InjecAgent](https://github.com/uiuc-kang-lab/InjecAgent) (Zhan et al., UIUC,
-ACL 2024). What it does not stop is measured and listed too, and each gap
-has a target in the [roadmap](ROADMAP.md).
+ACL 2024) stopped when delivered as a web page. 0 of 35 everyday tasks
+interrupted, 0.15 ms per call. What it does not stop is measured and listed
+too, and each gap has a target in the [roadmap](ROADMAP.md).
 
 The companion to [`agent-memory`](../Agent%20memory%20skill). The memory skill
 protects long-term truth (what may be remembered). This guard protects the
@@ -376,6 +376,15 @@ python -m pytest tests -v
 No runtime dependencies — pure stdlib. `pytest` only for development.
 
 ## Status & roadmap
+
+v0.5.0 — closes the gaps the benchmark measured in 0.4.4. The browser tool is
+judged by the code it runs (reading stays free; filling a form or running a
+shell command after a web read is asked about). Typing into a running process,
+third-party (MCP) tools that do not declare themselves read-only, and the
+output of `curl` or `git clone` are covered too, and `untrusted_paths` marks a
+download folder as outside content. Attacks through covered sources: 2,520 of
+2,520 stopped (was 1,728 of 1,920); InjecAgent via web page 1,054 of 1,054
+(was 561). Everyday work: still no extra questions.
 
 v0.4.4 — in the official Hermes plugin catalog since 2026-11-11, after review
 by Nous Research. A scheduled job, a subagent or desktop control asked for after a web

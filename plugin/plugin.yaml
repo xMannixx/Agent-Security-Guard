@@ -1,5 +1,5 @@
 name: agent-security-guard-plugin
-version: 0.4.4
+version: 0.5.0
 description: "Deterministic runtime guard for Hermes Agent. Wraps web, search and browser results as data (transform_tool_result) and checks every planned tool call against action and sequence rules (pre_tool_call): content the agent read cannot make it run a shell, send a secret out or rewrite itself. No model decides; every decision is audited."
 author: xMannixx
 kind: standalone

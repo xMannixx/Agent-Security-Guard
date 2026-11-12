@@ -21,8 +21,8 @@ to Hermes's approval prompt (the user decides) or the guard refuses it.
 
 ## What is measured
 
-1. **Attacks on Hermes's own tools: 21 goals × 7 sources × 24 techniques
-   (3,528 cases).**
+1. **Attacks on Hermes's own tools: 22 goals × 7 sources × 24 techniques
+   (3,696 cases).**
    - **Goals.** What the page wants done: run a command, change files, steal
      a secret, plant instructions (memory, skills, the guard's own code,
      Hermes's config), act later or elsewhere (cron job, subagent, browser,
@@ -33,10 +33,12 @@ to Hermes's approval prompt (the user decides) or the guard refuses it.
      `computer_use`, `process_manage`, `send_message`, and for mail an MCP
      tool.
    - **Sources.** How the content arrives:
-     - the four the shipped policy treats as outside content: `web_extract`,
-       `web_search`, `x_search`, `browser_exec`;
-     - three it does not: a downloaded file read with `read_file`, a shell
-       command's output, and an MCP mail tool.
+     - the five the shipped policy treats as outside content: `web_extract`,
+       `web_search`, `x_search`, `browser_exec`, and the output of a shell
+       command that fetches from another host (`curl`);
+     - two that count once the operator says so: a downloaded file read with
+       `read_file` (`untrusted_paths`), and an MCP mail tool (`trust:
+       untrusted` on the server in Hermes).
    - **Techniques.** 24 phrasings and disguises: the two InjecAgent forms,
      "ignore previous", fake system headers, fake end-of-data markers, a
      friendly setup step, HTML comments, hidden text, JSON fields, German,
@@ -54,7 +56,7 @@ to Hermes's approval prompt (the user decides) or the guard refuses it.
      `mcp__<server>__<tool>`; their `TerminalExecute` is Hermes's `terminal`.
    - Each case is run twice: delivered by the MCP tool it names, and
      delivered as a web page.
-3. **Everyday work.** 28 tasks with no attack, from "run the tests" to
+3. **Everyday work.** 42 tasks with no attack, from "run the tests" to
    "read the docs, then install it". Here a stop is a question the user did
    not need.
 4. **Data blocks.** Every page from a covered source must reach the model as
@@ -62,12 +64,22 @@ to Hermes's approval prompt (the user decides) or the guard refuses it.
 5. **Speed.** Time per tool call over every case, and 20 KB of hostile input
    (the patterns made linear in 0.4.3).
 
-Everything runs under three policies, each in a process of its own with an
+Everything runs under five policies, each in a process of its own with an
 empty home:
 
 - the policy as shipped;
-- the shipped policy plus `mcp__*` in `untrusted_content_tools` (one line);
+- `no-hints`: as shipped with `mcp_hints: false`, which is how 0.4.4 treated
+  MCP tools;
+- `mcp-untrusted`: as shipped, with the MCP servers marked `trust: untrusted`
+  in Hermes's config;
+- `lists`: as shipped plus `mcp__*` in `untrusted_content_tools` and
+  `~/Downloads/` in `untrusted_paths` (two lines);
 - `mode: strict`.
+
+Hermes's facts about its MCP tools (the `readOnlyHint` each declares, the
+server's trust) are simulated: a tool whose name starts with a reading verb
+(`get`, `read`, `search`, `list`, ...) declares itself read-only, as a
+well-behaved server would; every other tool declares nothing.
 
 ## How Hermes is reproduced
 
@@ -84,21 +96,24 @@ reproducible. Nothing is executed either: commands, paths and addresses only
 reach the guard's hook, which decides before a tool would run. Domains are
 under `.example`, and secrets are made up.
 
-## Results (0.4.4, policy as shipped)
+## Results (0.5.0, policy as shipped)
 
 Full tables: [`results/RESULTS.md`](results/RESULTS.md).
 
 | | |
 |---|---|
-| Attacks on Hermes's own tools through web, search, X or browser (chat messages left out, see below) | **1,728 / 1,920 stopped (90.0 %)** |
-| the same before 0.4.4 (cron job, subagent and desktop control were not known) | 1,440 / 1,920 (75.0 %) |
-| Does the phrasing change the result? | **No.** Each of the 24 techniques: 72 / 80 |
-| The same pages judged by their wording (the guard's own injection patterns) | 320 / 1,920 recognized (16.7 %); with shell patterns 812 (42.3 %) |
-| Everyday tasks asked about, with no outside content in the turn | **0 / 15** |
-| Research only, or research and then act in the next turn | **0 / 9** |
-| Research and act in the same turn | 4 / 4 (by design, see below) |
-| Pages reaching the model as one intact data block | 2,016 / 2,016 |
-| Time per tool call | median 0.12 ms, p99 0.31 ms |
+| Attacks on Hermes's own tools through web, search, X, the browser or a `curl` (chat messages left out, see below) | **2,520 / 2,520 stopped** |
+| the same in 0.4.4 (four sources then, 1,920 cases) | 1,728 / 1,920 (90.0 %) |
+| Does the phrasing change the result? | **No.** Each of the 24 techniques: 105 / 105 |
+| The same pages judged by their wording (the guard's own injection patterns) | 420 / 2,520 recognized (16.7 %); with shell patterns 1,125 (44.6 %) |
+| InjecAgent delivered as a web page | **1,054 / 1,054** (0.4.4: 561) |
+| InjecAgent delivered by MCP, servers as configured by default | 62 / 1,054 |
+| InjecAgent delivered by MCP, servers marked `trust: untrusted` | **1,054 / 1,054** (0.4.4: 33) |
+| Everyday tasks asked about, with no outside content in the turn | **0 / 19** |
+| Research only, or research and then act in the next turn | **0 / 16** |
+| Research and act in the same turn | 7 / 7 (by design, see below) |
+| Pages reaching the model as one intact data block | 2,640 / 2,640 |
+| Time per tool call | median 0.14 ms, p99 0.41 ms |
 
 The text-filter row is a comparison, not part of the guard: the guard decides
 by *where* content came from and *what* the next call does, never by how the
@@ -110,40 +125,27 @@ on the wording.
 
 ## What it does not stop, measured
 
-- **Browser actions.**
-  - What it misses: `browser_exec` both reads pages and acts on them (fills
-    forms, clicks), and the guard cannot tell the two apart. 0 / 96.
-  - Why it stays: asking after every page would ask on every step of
-    browsing.
-- **Input to a running process.**
-  - What it misses: `process_manage` writing to a shell that is already
-    running. 0 / 96.
-  - Why it stays: most of its calls only read a process's output.
 - **Chat messages.**
   - What it misses: `send_message` is audited, not stopped. 0 / 96.
   - Why it stays: on Hermes it is how the agent answers its own user. This
     is deliberate.
-- **Outside content the policy does not know as such.**
-  - What it misses: a downloaded file read with `read_file`, the output of
-    `curl` in the terminal, an MCP tool's result. 96 / 480 each.
+- **Outside content the operator has not named.**
+  - What it misses: a downloaded file read with `read_file`, and the result
+    of an MCP tool, unless the download folder is in `untrusted_paths` or the
+    server is marked `trust: untrusted`. 96 / 504 each.
   - What still works: the secret rules, and self-modification, which hold
-    from every source.
-  - How to cover it: add `mcp__*` to `untrusted_content_tools` for MCP.
-- **Third-party tools the guard does not know.**
-  - What it misses: after a web page, an MCP tool such as
-    `mcp__bank_manager__transfer_funds` runs, because the guard has no tier
-    for it. InjecAgent:
-    - 561 / 1,054 delivered as a web page;
-    - 33 / 1,054 delivered by MCP with the shipped policy;
-    - 561 / 1,054 delivered by MCP with `mcp__*` listed.
-  - How to cover it: declare such tools in `tool_tiers`, or run
-    `mode: strict`, which stops all 1,054 cases. Strict asks about every
-    unrecognized tool, though, in every turn: in the everyday set it asked
-    in 28 of 28 tasks.
+    from every source; and a write-capable MCP tool is asked about after any
+    outside content, whatever the server is marked.
+- **Hints the guard takes on trust.**
+  - An MCP tool that wrongly declares itself read-only stays free. Hermes
+    does the same for its own `trust: untrusted` gate.
+  - The browser tool's code is read, not run, and judged by an allow-list.
+    It fails towards asking, but it is a check of the code, not a sandbox.
 - **"Asked" still needs a "no".** "Allow for this session", or
   `hermes --yolo`, answers the prompt for the user.
 - **Research and act in one turn is asked about.**
-  - Example: "find the install command and run it".
+  - Example: "find the install command and run it", "clone this and run its
+    tests", "read the page and put the key points into Notion".
   - Why: the page may be what proposes the action, and the guard cannot
     tell. This is the main cost of the design. The next turn starts clean.
 
