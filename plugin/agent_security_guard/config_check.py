@@ -26,7 +26,7 @@ STRING_LISTS = (
     "domain_allowlist", "sensitive_paths", "secret_patterns",
     "self_modification_paths", "untrusted_content_tools",
 )
-BOOLEANS = ("scope_from_text", "wrap_tool_results")
+BOOLEANS = ("scope_from_text", "wrap_tool_results", "mcp_hints")
 ON_ERROR = ("degrade", "deny_all")
 #: ``none`` is how to say "no audit" on purpose.
 AUDIT_BACKENDS = ("sqlite", "jsonl", "both", "none")

@@ -108,6 +108,8 @@ def classify_action(
         tier = _host_tool_tier(kind)
     if tier is None:
         tier = _tier_by_action(kind, action)
+    if tier is None:
+        tier = _tier_from_host_facts(kind, config)
     if tier is not None:
         return _read_tier_for_target(tier, action.target)
 
@@ -257,7 +259,11 @@ def recognized_by_name_only(
         return False
     if kind in _KIND_TIER or kind in _GENERIC_HTTP_KINDS:
         return False
-    return _host_tool_tier(kind) is not None or _tier_by_action(kind, action) is not None
+    return (
+        _host_tool_tier(kind) is not None
+        or _tier_by_action(kind, action) is not None
+        or _tier_from_host_facts(kind, config) is not None
+    )
 
 
 def _kind(action: AgentAction) -> str:
@@ -267,6 +273,15 @@ def _kind(action: AgentAction) -> str:
 def _declared_tier(kind: str, config: Optional[GuardConfig]) -> Optional[ActionTier]:
     declared = config.tool_tiers.get(kind) if config and config.tool_tiers else None
     return ActionTier(declared) if declared is not None else None
+
+
+def _tier_from_host_facts(kind: str, config: Optional[GuardConfig]) -> Optional[ActionTier]:
+    tiers = getattr(config, "host_tool_tiers", None) if config is not None else None
+    value = tiers.get(kind) if tiers else None
+    try:
+        return ActionTier(value) if value is not None else None
+    except ValueError:
+        return None
 
 
 def _tier_by_action(kind: str, action: AgentAction) -> Optional[ActionTier]:

@@ -34,6 +34,25 @@ project adheres to [Semantic Versioning](https://semver.org/).
   is not asked about; filling a form on a page read in the same turn is.
   With the engine unavailable, every `browser_exec` call is held back.
 
+- **Third-party (MCP) tools are judged by what Hermes knows about them**
+  ([#39], [#40]). Hermes records, for each MCP tool, whether it declares
+  itself read-only (`readOnlyHint`), and whether the operator marked its
+  server `trust: untrusted`. The guard now uses both (`mcp_hints: true`,
+  on by default):
+  - a tool that does not declare itself read-only (a missing hint counts as
+    write-capable, as in Hermes) runs, audited, on its own, and goes to the
+    approval prompt once outside content is in the turn, like `terminal`;
+    read-only tools stay free;
+  - what a tool of an untrusted server returns is outside content: wrapped
+    as data, and it gates the rest of the turn like a web page.
+  A tier declared in `tool_tiers` still wins. Benchmark: InjecAgent
+  delivered as a web page 1054 / 1054 (was 561); delivered by MCP 1054 /
+  1054 with the servers marked untrusted (was 33); MCP mail 504 / 504 then.
+  New everyday tasks with read-only and write-capable MCP tools: not asked,
+  except reading a page and writing to Notion in one turn (by design).
+
+[#39]: https://github.com/xMannixx/Agent-Security-Guard/issues/39
+[#40]: https://github.com/xMannixx/Agent-Security-Guard/issues/40
 [#42]: https://github.com/xMannixx/Agent-Security-Guard/issues/42
 [#43]: https://github.com/xMannixx/Agent-Security-Guard/issues/43
 
