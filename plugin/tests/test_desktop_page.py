@@ -63,6 +63,8 @@ def api(monkeypatch, tmp_path):
     spec.loader.exec_module(module)
     backend = module._plugin()
     monkeypatch.setattr(backend, "_config_path", lambda: None)
+    monkeypatch.setattr(backend, "_hermes_home", lambda: tmp_path / "home" / ".hermes")
+    monkeypatch.setattr(backend, "_SYSTEM_CONFIG", tmp_path / "etc" / "guard.yaml")
     return module
 
 
@@ -126,6 +128,8 @@ def test_status_reports_mode_version_and_todays_counts(api, hooks):
     assert status["mode_source"] == "config"
     assert status["version"]
     assert status["config_error"] is None
+    assert status["mode_locked"] is None
+    assert status["modes"] == ["monitor", "autonomous-safe", "strict"]
     assert status["today"]["asked"] == 1
     assert status["today"]["allowed"] >= 2
 

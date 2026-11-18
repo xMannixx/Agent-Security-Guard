@@ -85,6 +85,10 @@ def status():
     result = ui.status(package, config)
     result["config_path"] = path
     result["config_error"] = config_error
+    # Whether the page may switch the mode (it does so over plugin RPC, not here).
+    mode = importlib.import_module(_MODULE + "._mode")
+    result["mode_locked"], result["mode_file"] = mode.describe(_plugin())
+    result["modes"] = list(mode.MODES)
     return result
 
 

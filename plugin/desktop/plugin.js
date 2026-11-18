@@ -13,6 +13,7 @@ import {
   Badge,
   Button,
   Codicon,
+  ConfirmDialog,
   EmptyState,
   ErrorState,
   Loader,
@@ -24,7 +25,8 @@ import {
   host,
   relativeTime,
   useI18n,
-  useQuery
+  useQuery,
+  useQueryClient
 } from '@hermes/plugin-sdk'
 import { useState } from 'react'
 import { jsx, jsxs } from 'react/jsx-runtime'
@@ -49,12 +51,25 @@ const TEXT = {
     today: 'today',
     mode: 'Mode',
     modes: {
-      'autonomous-safe': 'standard',
-      balanced: 'balanced',
-      strict: 'strict',
-      monitor: 'monitor only (nothing is stopped)'
+      strict: 'Strict',
+      'autonomous-safe': 'Standard',
+      monitor: 'Monitor only'
+    },
+    modeHelp: {
+      strict: 'Also asks about tools it does not know.',
+      'autonomous-safe': 'Stops the dangerous cases: a shell, install or send-out after outside content, secrets leaving, self-changes.',
+      monitor: 'Stops nothing. It only records what it would have done.'
     },
     modeFromEnv: 'set by AGENT_SECURITY_GUARD_MODE',
+    modeLocked: 'Locked',
+    modeChangeRow: (from, to) => `Mode changed from ${from} to ${to}.`,
+    modeChanged: mode => `Security Guard: mode is now ${mode}`,
+    modeFailed: 'The mode could not be changed',
+    confirmTitle: mode => `Switch to “${mode}”?`,
+    confirmMonitor: 'The guard then stops nothing: a web page could make your agent run commands or send data out. Use this only to try something out, and switch back afterwards.',
+    confirmWeaker: 'The guard will then ask about fewer things.',
+    confirmButton: 'Switch',
+    cancel: 'Cancel',
     attention: 'Asked or blocked',
     all: 'All',
     recent: 'Recent decisions',
@@ -73,7 +88,7 @@ const TEXT = {
     unreachable: 'The guard backend is not reachable',
     unreachableHint: 'Add agent-security-guard-plugin to plugins.enabled in config.yaml and restart Hermes.',
     configError: 'guard.yaml could not be read; the built-in defaults are in force',
-    readOnly: 'Read only. Approvals stay in Hermes’s own prompt.',
+    readOnly: 'Approvals stay in Hermes’s own prompt. Every mode change is recorded in the audit trail.',
     chip: 'Security Guard: asked or blocked today'
   },
   de: {
@@ -87,12 +102,25 @@ const TEXT = {
     today: 'heute',
     mode: 'Modus',
     modes: {
+      strict: 'Streng',
       'autonomous-safe': 'Standard',
-      balanced: 'ausgewogen',
-      strict: 'streng',
-      monitor: 'nur beobachten (nichts wird gestoppt)'
+      monitor: 'Nur beobachten'
+    },
+    modeHelp: {
+      strict: 'Fragt zusätzlich bei Werkzeugen nach, die er nicht kennt.',
+      'autonomous-safe': 'Stoppt die gefährlichen Fälle: Shell, Installation oder Versand nach fremdem Inhalt, Geheimnisse nach außen, Selbstveränderung.',
+      monitor: 'Stoppt nichts. Er schreibt nur auf, was er getan hätte.'
     },
     modeFromEnv: 'gesetzt über AGENT_SECURITY_GUARD_MODE',
+    modeLocked: 'Gesperrt',
+    modeChangeRow: (from, to) => `Modus geändert von ${from} auf ${to}.`,
+    modeChanged: mode => `Security Guard: Modus ist jetzt ${mode}`,
+    modeFailed: 'Der Modus konnte nicht geändert werden',
+    confirmTitle: mode => `Auf „${mode}“ umschalten?`,
+    confirmMonitor: 'Dann stoppt der Guard nichts mehr: Eine Webseite könnte deinen Agenten Befehle ausführen oder Daten verschicken lassen. Nur zum Ausprobieren nutzen und danach zurückschalten.',
+    confirmWeaker: 'Der Guard fragt dann bei weniger Dingen nach.',
+    confirmButton: 'Umschalten',
+    cancel: 'Abbrechen',
     attention: 'Nachgefragt oder blockiert',
     all: 'Alle',
     recent: 'Letzte Entscheidungen',
@@ -111,7 +139,7 @@ const TEXT = {
     unreachable: 'Das Guard-Backend ist nicht erreichbar',
     unreachableHint: 'agent-security-guard-plugin in config.yaml unter plugins.enabled eintragen und Hermes neu starten.',
     configError: 'guard.yaml war nicht lesbar; es gelten die eingebauten Regeln',
-    readOnly: 'Nur Anzeige. Freigaben bleiben in Hermes’ eigener Abfrage.',
+    readOnly: 'Freigaben bleiben in Hermes’ eigener Abfrage. Jede Modus-Änderung steht im Protokoll.',
     chip: 'Security Guard: heute nachgefragt oder blockiert'
   }
 }
@@ -196,7 +224,7 @@ function useGuard(path, enabled = true) {
   })
 }
 
-const CATEGORY_BADGE = { asked: 'warn', blocked: 'destructive', allowed: 'muted' }
+const CATEGORY_BADGE = { asked: 'warn', blocked: 'destructive', allowed: 'muted', mode: 'default' }
 
 // --------------------------------------------------------------------------
 // Pieces
@@ -233,8 +261,21 @@ function when(ts, lang) {
   }
 }
 
+// "mode autonomous-safe -> monitor (desktop)" as the page names the modes.
+function modeChangeText(message, t) {
+  const found = /mode (\S+) -> (\S+)/.exec(message || '')
+  if (!found) {
+    return message || ''
+  }
+  const name = mode => (t.modes && t.modes[mode]) || mode
+  return t.modeChangeRow(name(found[1]), name(found[2]))
+}
+
 function Decision({ item, lang, t }) {
-  const reason = (REASONS[item.reason_code] && REASONS[item.reason_code][lang]) || item.message || item.reason_code
+  const modeChange = item.category === 'mode'
+  const reason = modeChange
+    ? modeChangeText(item.message, t)
+    : (REASONS[item.reason_code] && REASONS[item.reason_code][lang]) || item.message || item.reason_code
   return jsxs('div', {
     style: { display: 'flex', gap: '12px', padding: '10px 0', borderTop: '1px solid var(--ui-stroke-secondary)' },
     children: [
@@ -248,7 +289,7 @@ function Decision({ item, lang, t }) {
           jsxs('div', {
             style: { display: 'flex', gap: '8px', alignItems: 'baseline', flexWrap: 'wrap' },
             children: [
-              jsx('code', { style: { fontWeight: 600 }, children: item.tool || '?' }),
+              modeChange ? null : jsx('code', { style: { fontWeight: 600 }, children: item.tool || '?' }),
               item.after_outside_tool
                 ? jsx('span', { style: { ...muted, fontSize: '0.8rem' }, children: `${t.after} ${item.after_outside_tool}` })
                 : null
@@ -312,6 +353,73 @@ function Trail({ t }) {
   })
 }
 
+const MODE_ORDER = ['monitor', 'autonomous-safe', 'strict']
+
+function ModeSwitch({ s, t }) {
+  const queryClient = useQueryClient()
+  const [pending, setPending] = useState(null)
+  const label = mode => (t.modes && t.modes[mode]) || mode
+
+  const apply = async mode => {
+    const result = await host.request(`plugin.${ID}.mode.set`, { mode })
+    if (result && result.error) {
+      throw new Error(result.error)
+    }
+    host.notify({ kind: 'success', message: t.modeChanged(label(mode)) })
+    queryClient.invalidateQueries({ queryKey: [ID] })
+  }
+
+  const choose = mode => {
+    if (mode === s.mode) {
+      return
+    }
+    if (MODE_ORDER.indexOf(mode) < MODE_ORDER.indexOf(s.mode)) {
+      setPending(mode)  // weaker: ask first
+      return
+    }
+    apply(mode).catch(error => host.notify({ kind: 'error', message: `${t.modeFailed}: ${(error && error.message) || error}` }))
+  }
+
+  const locked = s.mode_locked || s.mode_source === 'env'
+  return jsxs('div', {
+    style: { display: 'flex', flexDirection: 'column', gap: '4px' },
+    children: [
+      jsxs('div', {
+        style: { display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' },
+        children: [
+          jsx('span', { style: { ...muted, fontSize: '0.8rem' }, children: t.mode }),
+          locked
+            ? jsx(Tip, {
+                label: s.mode_locked || t.modeFromEnv,
+                children: jsx(Badge, { variant: 'outline', children: `${label(s.mode)} · ${t.modeLocked}` })
+              })
+            : jsx(SegmentedControl, {
+                value: s.mode,
+                onChange: choose,
+                sizing: 'content',
+                options: MODE_ORDER.slice().reverse().map(mode => ({ id: mode, label: label(mode) }))
+              })
+        ]
+      }),
+      jsx('div', {
+        style: s.mode === 'monitor' ? { fontSize: '0.8rem', color: 'var(--ui-accent)' } : { ...muted, fontSize: '0.8rem' },
+        children: (t.modeHelp && t.modeHelp[s.mode]) || ''
+      }),
+      jsx(ConfirmDialog, {
+        open: pending !== null,
+        onClose: () => setPending(null),
+        onConfirm: () => apply(pending),
+        dismissOnConfirm: true,
+        destructive: pending === 'monitor',
+        title: t.confirmTitle(label(pending)),
+        description: pending === 'monitor' ? t.confirmMonitor : t.confirmWeaker,
+        confirmLabel: t.confirmButton,
+        cancelLabel: t.cancel
+      })
+    ]
+  })
+}
+
 function Page() {
   const { lang, t } = useText()
   const [scope, setScope] = useState('attention')
@@ -331,7 +439,6 @@ function Page() {
   const s = status.data
   const today = s.today || {}
   const items = (list.data && list.data.decisions) || []
-  const modeLabel = (t.modes && t.modes[s.mode]) || s.mode
 
   return jsx('div', {
     style: { height: '100%', overflow: 'auto' },
@@ -345,12 +452,11 @@ function Page() {
               children: [
                 jsx(Codicon, { name: 'shield' }),
                 jsx('h1', { style: { fontSize: '1.25rem', fontWeight: 600, margin: 0 }, children: t.title }),
-                jsx(Badge, { variant: s.mode === 'monitor' ? 'warn' : 'outline', children: `${t.mode}: ${modeLabel}` }),
                 s.version ? jsx('span', { style: { ...muted, fontSize: '0.8rem' }, children: `v${s.version}` }) : null
               ]
             }),
             jsx('div', { style: { ...muted, fontSize: '0.85rem', marginTop: '4px' }, children: t.subtitle }),
-            s.mode_source === 'env' ? jsx('div', { style: { ...muted, fontSize: '0.8rem' }, children: t.modeFromEnv }) : null,
+            jsx('div', { style: { marginTop: '12px' }, children: jsx(ModeSwitch, { s, t }) }),
             s.config_error ? jsx('div', { style: { fontSize: '0.8rem', marginTop: '4px' }, children: jsx(Badge, { variant: 'destructive', children: t.configError }) }) : null
           ]
         }),

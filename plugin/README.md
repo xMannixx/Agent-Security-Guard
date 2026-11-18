@@ -83,8 +83,17 @@ decisions with their reason in plain words (and, for a question after a web
 read, which tool brought the outside content), the mode, and a button that
 checks the audit trail's hash chain. English and German.
 
-It is **read only**: it changes no setting and never answers an approval,
-which stays in Hermes's own prompt. Like every Desktop half it is off until you
+The page can **switch the mode** (Strict, Standard, Monitor only). Switching to
+a weaker mode asks first. Only the `mode:` line of the policy file changes;
+the guard picks the change up within a second, without a restart, and keeps
+what the current turn has already read. Every change is recorded in the audit
+trail and listed on the page. The switch is locked when a root-owned
+`/etc/agent-security-guard/guard.yaml` or `AGENT_SECURITY_GUARD_MODE` decides
+the mode: that is the way to keep the mode out of reach of anything running as
+you. It goes through Hermes's plugin RPC (`plugin.<id>.mode.set`), which Hermes
+serves only to clients its gateway authenticated.
+
+The page never answers an approval, which stays in Hermes's own prompt. Like every Desktop half it is off until you
 turn it on in **Capabilities → Plugins**; its backend routes need the plugin in
 `plugins.enabled` and a restart of Hermes.
 
@@ -98,6 +107,9 @@ turn it on in **Capabilities → Plugins**; its backend routes need the plugin i
   link; it does not read the file's contents.
 - **Writes** its audit trail to `$XDG_STATE_HOME/agent-security-guard/`
   (default `~/.local/state/agent-security-guard/`), files mode `0600`.
+- **Mode switch:** writes the `mode:` line of the active policy file (the
+  Hermes home's `guard.yaml`, created if missing, mode `0600`); never the
+  `/etc` policy.
 - **Desktop page:** three read-only routes (`dashboard/plugin_api.py`,
   `GET /api/plugins/agent-security-guard-plugin/{status,decisions,verify}`)
   that read the audit trail. It holds tool names, decisions and reasons, never

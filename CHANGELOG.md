@@ -6,6 +6,17 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Switch the mode on the Desktop page.** Strict, Standard or Monitor only;
+  a weaker mode asks first. Only the `mode:` line of the policy file changes,
+  comments and every other line stay. The hooks pick a changed policy file up
+  within a second, without a restart, and keep what the current turn has
+  read. Each change is an audit record (`mode_change`) and shows on the page.
+  Locked when `/etc/agent-security-guard/guard.yaml` or
+  `AGENT_SECURITY_GUARD_MODE` decides the mode. Through Hermes's plugin RPC
+  (`ctx.register_rpc`), served only to authenticated gateway clients.
+
 ### Fixed
 
 - **An update now takes effect in a running gateway.** Hermes reloads the

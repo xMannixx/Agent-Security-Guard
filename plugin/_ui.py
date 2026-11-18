@@ -19,6 +19,8 @@ from typing import Any, Dict, List, Optional
 ASKED = "asked"
 BLOCKED = "blocked"
 ALLOWED = "allowed"
+# A change of mode made by the person, not a decision about a tool call.
+MODE = "mode"
 
 # The one denial that only lacks the user's order. Hermes asks the person
 # about it when nothing untrusted proposed the call (``_decisions``).
@@ -31,7 +33,10 @@ MAX_LIST = 200
 
 
 def category(record: Dict[str, Any]) -> str:
-    """``asked``, ``blocked`` or ``allowed``: what the person saw of a decision."""
+    """``asked``, ``blocked`` or ``allowed``: what the person saw of a decision;
+    ``mode`` for a change of mode."""
+    if record.get("event_type") == "mode_change":
+        return MODE
     decision = str(record.get("decision") or "")
     if decision == "require_confirmation":
         return ASKED
@@ -100,8 +105,9 @@ def status(package, config, now: Optional[datetime] = None) -> Dict[str, Any]:
     today = {ASKED: 0, BLOCKED: 0, ALLOWED: 0}
     for record in records:
         stamp = when(record)
-        if stamp is not None and stamp.astimezone().date() == now.date():
-            today[category(record)] += 1
+        kind = category(record)
+        if kind in today and stamp is not None and stamp.astimezone().date() == now.date():
+            today[kind] += 1
     audit_cfg = dict(config.audit or {})
     return {
         "version": getattr(package, "__version__", None),
