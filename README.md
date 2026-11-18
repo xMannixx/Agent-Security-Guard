@@ -51,8 +51,8 @@ on in **Capabilities → Plugins** (search "Security Guard", switch on
 *Desktop*).
 
 <p align="center">
-  <img src="docs/images/desktop-page.png" alt="The Security Guard page in Hermes Desktop: mode switch, today's counts, recent decisions with their reasons" width="520">
-  <img src="docs/images/desktop-mode-confirm.png" alt="Switching to Monitor only asks first and says that nothing is stopped then" width="430">
+  <img src="docs/images/desktop-page.png" alt="The Security Guard page in Hermes Desktop: mode switch, today's counts, recent decisions with their reasons" width="420">
+  <img src="docs/images/desktop-mode-confirm.png" alt="Switching to Monitor only asks first and says that nothing is stopped then" width="380">
 </p>
 
 ---
