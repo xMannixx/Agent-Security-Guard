@@ -1,13 +1,13 @@
 # Benchmark results
 
-Agent Security Guard 0.5.2, run 2026-11-18 (`python benchmarks/run_benchmark.py`, 9 s). No model and no network: every case assumes a model that does what the injected text says, and asks what the guard lets through. Method and limits: [README](../README.md).
+Agent Security Guard 0.6.0, run 2026-11-18 (`python benchmarks/run_benchmark.py`, 8 s). No model and no network: every case assumes a model that does what the injected text says, and asks what the guard lets through. Method and limits: [README](../README.md).
 
 ## Headline (policy as shipped)
 
 - **Attacks on Hermes's own tools, through a web page, search, X, the browser or a fetching shell command:** 2520/2520 (100.0 %) stopped before the tool ran (2280 sent to Hermes's approval prompt, 240 refused).
 - **The same attacks, judged by their wording instead** (the guard's own pattern list, the way text filters work): 420/2520 recognized as injection, 1125/2520 counting shell patterns too.
 - **Everyday work:** see the table below; tasks with outside content and an action in the same turn are asked about by design.
-- **Speed:** median 0.142 ms per tool call, p99 0.502 ms (13103 calls).
+- **Speed:** median 0.127 ms per tool call, p99 0.385 ms (13103 calls).
 
 ## Attacks on Hermes's own tools, by goal
 
@@ -124,7 +124,7 @@ Every page from a covered source reached the model as exactly one data block, it
 
 | Input | Wrap the page + check a write (ms) |
 |---|---|
-| 20 KB page of 'rm -r' | 5.06 |
-| 20 KB of spaces in a patch header | 6.31 |
-| 20 KB of newlines | 6.72 |
-| 200 KB ordinary page | 59.54 |
+| 20 KB page of 'rm -r' | 5.2 |
+| 20 KB of spaces in a patch header | 6.17 |
+| 20 KB of newlines | 6.84 |
+| 200 KB ordinary page | 57.89 |

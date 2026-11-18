@@ -6,8 +6,21 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-18
+
+**A page in Hermes Desktop.** What the guard asked about, blocked and allowed,
+why, and a switch for its mode. The rules themselves are unchanged.
+
 ### Added
 
+- **A Hermes Desktop page.** `plugin/desktop/plugin.js` adds a Security Guard
+  page, a sidebar entry, a ⌘K command and a status-bar shield: what was asked
+  about, blocked and allowed today, the newest decisions with their reason in
+  plain words, and a check of the audit trail's hash chain. English and
+  German. It never answers an approval. Its backend
+  (`plugin/dashboard/plugin_api.py`) has three GET routes over the audit
+  trail. Uses the Desktop plugin SDK and public Hermes surfaces only;
+  `hermes plugins validate` passes its `desktop surface` check.
 - **Switch the mode on the Desktop page.** Strict, Standard or Monitor only;
   a weaker mode asks first. Only the `mode:` line of the policy file changes,
   comments and every other line stay. The hooks pick a changed policy file up
@@ -25,17 +38,6 @@ project adheres to [Semantic Versioning](https://semver.org/).
   it was restarted. The plugin now notices that the copy it loaded was
   replaced on disk and loads the new one. A package the host imported from
   elsewhere is left alone.
-
-### Added
-
-- **A Hermes Desktop page.** `plugin/desktop/plugin.js` adds a Security Guard
-  page, a sidebar entry, a ⌘K command and a status-bar shield: what was asked
-  about, blocked and allowed today, the newest decisions with their reason in
-  plain words, the mode, and a check of the audit trail's hash chain. English
-  and German. Read only: it changes no setting and answers no approval. Its
-  backend (`plugin/dashboard/plugin_api.py`) has three GET routes over the
-  audit trail. Uses the Desktop plugin SDK and public Hermes surfaces only;
-  `hermes plugins validate` passes its `desktop surface` check.
 
 ## [0.5.2] - 2026-11-18
 

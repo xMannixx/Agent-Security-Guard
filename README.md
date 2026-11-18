@@ -379,6 +379,11 @@ No runtime dependencies — pure stdlib. `pytest` only for development.
 
 ## Status & roadmap
 
+v0.6.0 — a page in Hermes Desktop: what the guard asked about, blocked and
+allowed today and why, a check of the audit trail, and a switch for the mode
+(a weaker mode asks first; every change is recorded). An update now takes
+effect in a running gateway without a restart. The rules are unchanged.
+
 v0.5.2 — the plugin folder, which is all a catalog install gets, carries its
 own tests (30, run on every platform in CI), and its entry file is split by
 job (43 KB → 25 KB). What the guard decides is unchanged.
