@@ -6,6 +6,17 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **A Hermes Desktop page.** `plugin/desktop/plugin.js` adds a Security Guard
+  page, a sidebar entry, a ⌘K command and a status-bar shield: what was asked
+  about, blocked and allowed today, the newest decisions with their reason in
+  plain words, the mode, and a check of the audit trail's hash chain. English
+  and German. Read only: it changes no setting and answers no approval. Its
+  backend (`plugin/dashboard/plugin_api.py`) has three GET routes over the
+  audit trail. Uses the Desktop plugin SDK and public Hermes surfaces only;
+  `hermes plugins validate` passes its `desktop surface` check.
+
 ## [0.5.2] - 2026-11-18
 
 **The plugin folder tests itself.** What the guard decides is unchanged.

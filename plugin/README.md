@@ -74,6 +74,20 @@ it would have done. `strict` additionally asks about tools it does not know.
 A root-owned `/etc/agent-security-guard/guard.yaml` takes precedence over the
 one in your home, so an agent cannot switch its own guard off.
 
+## Desktop page
+
+In Hermes Desktop the plugin adds a **Security Guard** page (sidebar, and
+`Open Security Guard` in ⌘K) and a shield in the status bar with the number of
+calls asked about or blocked today. The page shows today's counts, the newest
+decisions with their reason in plain words (and, for a question after a web
+read, which tool brought the outside content), the mode, and a button that
+checks the audit trail's hash chain. English and German.
+
+It is **read only**: it changes no setting and never answers an approval,
+which stays in Hermes's own prompt. Like every Desktop half it is off until you
+turn it on in **Capabilities → Plugins**; its backend routes need the plugin in
+`plugins.enabled` and a restart of Hermes.
+
 ## What it touches
 
 - **No network, no shell, no background process, no credentials.** Standard
@@ -84,6 +98,10 @@ one in your home, so an agent cannot switch its own guard off.
   link; it does not read the file's contents.
 - **Writes** its audit trail to `$XDG_STATE_HOME/agent-security-guard/`
   (default `~/.local/state/agent-security-guard/`), files mode `0600`.
+- **Desktop page:** three read-only routes (`dashboard/plugin_api.py`,
+  `GET /api/plugins/agent-security-guard-plugin/{status,decisions,verify}`)
+  that read the audit trail. It holds tool names, decisions and reasons, never
+  a tool's arguments, and so does the page. Nothing is sent anywhere else.
 - The policy engine ships inside the plugin directory
   (`agent_security_guard/`, generated from the repository's source package).
 
