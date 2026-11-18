@@ -19,7 +19,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.8%2B-blue.svg" alt="Python 3.8+"></a>
   <img src="https://img.shields.io/badge/deps-stdlib%20only-success.svg" alt="Dependencies: stdlib only">
-  <img src="https://img.shields.io/badge/tests-1438%20passing-success.svg" alt="Tests: 1438 passing">
+  <img src="https://img.shields.io/badge/tests-1506%20passing-success.svg" alt="Tests: 1506 passing">
 </p>
 
 <p align="center">
@@ -41,6 +41,19 @@ The companion to [`agent-memory`](../Agent%20memory%20skill). The memory skill
 protects long-term truth (what may be remembered). This guard protects the
 dangerous moment **before** an action: context intake, tool call, memory write,
 external action, and chain drift (what untrusted content is allowed to *become*).
+
+## In Hermes Desktop
+
+Since 0.6.0 the plugin brings its own page to Hermes Desktop. It shows what
+the guard asked about, blocked and allowed today and why. It checks the audit
+trail with one click and switches the mode; a weaker mode asks first. Turn it
+on in **Capabilities → Plugins** (search "Security Guard", switch on
+*Desktop*).
+
+<p align="center">
+  <img src="docs/images/desktop-page.png" alt="The Security Guard page in Hermes Desktop: mode switch, today's counts, recent decisions with their reasons" width="520">
+  <img src="docs/images/desktop-mode-confirm.png" alt="Switching to Monitor only asks first and says that nothing is stopped then" width="430">
+</p>
 
 ---
 
