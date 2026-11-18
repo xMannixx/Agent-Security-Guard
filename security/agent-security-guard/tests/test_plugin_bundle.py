@@ -120,3 +120,72 @@ def test_the_plugin_directory_alone_runs_its_own_copy(tmp_path):
     assert decision["decision"] == "deny"
     assert decision["reason_code"] == "SELF_MODIFICATION_REQUIRES_EXPLICIT_USER_ORDER"
     assert decision["action"] == "approve"
+
+
+_RELOAD_PROBE = r"""
+import importlib.util, json, re, sys
+from pathlib import Path
+plugin_dir = Path(sys.argv[1])
+
+def load():
+    # What Hermes does on a reload: evict the plugin's own modules, load again.
+    for key in [k for k in sys.modules if k == "guard_plugin" or k.startswith("guard_plugin.")]:
+        del sys.modules[key]
+    spec = importlib.util.spec_from_file_location(
+        "guard_plugin", plugin_dir / "__init__.py",
+        submodule_search_locations=[str(plugin_dir)])
+    plugin = importlib.util.module_from_spec(spec)
+    sys.modules["guard_plugin"] = plugin
+    spec.loader.exec_module(plugin)
+    return plugin
+
+load()
+before = sys.modules["agent_security_guard"].__version__
+init = plugin_dir / "agent_security_guard" / "__init__.py"
+init.write_text(re.sub(r'__version__ = "[^"]+"', '__version__ = "9.9.9"', init.read_text()))
+plugin = load()
+after = sys.modules["agent_security_guard"].__version__
+same = load() is not None and sys.modules["agent_security_guard"].__version__
+print(json.dumps({"before": before, "after": after, "same": same,
+                  "available": plugin.guard_status()["available"]}))
+"""
+
+
+@pytest.mark.skipif(
+    guard_plugin._SYSTEM_PACKAGE.exists(),
+    reason="a system-wide package is installed and would be loaded first",
+)
+def test_a_reload_after_an_update_runs_the_new_engine(tmp_path):
+    # Hermes reloads the plugin in the running gateway after an install or
+    # update. The guard package kept in memory used to stay the old one, so
+    # the gateway went on deciding with the old rules until restarted.
+    installed = tmp_path / "plugins" / "agent-security-guard"
+    shutil.copytree(PLUGIN_DIR, installed, ignore=shutil.ignore_patterns("__pycache__"))
+    home = tmp_path / "home"
+    home.mkdir()
+    env = dict(os.environ)
+    env.update({"HOME": str(home), "USERPROFILE": str(home), "XDG_STATE_HOME": str(tmp_path / "state")})
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", _RELOAD_PROBE, str(installed)],
+        cwd=tmp_path, env=env, capture_output=True, text=True, timeout=60,
+    )
+    assert result.returncode == 0, result.stderr
+    report = json.loads(result.stdout.strip().splitlines()[-1])
+    assert report["before"] != "9.9.9"
+    assert report["after"] == "9.9.9"
+    assert report["same"] == "9.9.9"
+    assert report["available"] is True
+
+
+def test_a_package_the_host_imported_from_elsewhere_is_left_alone(tmp_path):
+    import types
+
+    from plugin import _loader
+
+    elsewhere = tmp_path / "site-packages" / "agent_security_guard"
+    elsewhere.mkdir(parents=True)
+    (elsewhere / "__init__.py").write_text('__version__ = "1.0.0"\n', encoding="utf-8")
+    module = types.ModuleType("agent_security_guard")
+    module.__file__ = str(elsewhere / "__init__.py")
+    module.__version__ = "0.1.0"
+    assert _loader._replaced_on_disk(module) is False

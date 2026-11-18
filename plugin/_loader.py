@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import logging
 import os
+import re
 import stat
 import sys
 from pathlib import Path
@@ -98,14 +99,59 @@ def _load_package(location: Path, name: str = _PACKAGE) -> None:
 _load_notes: List[str] = []
 
 
+_VERSION_LINE = re.compile(r"""^__version__\s*=\s*["']([^"']+)["']""", re.MULTILINE)
+
+
+def _version_on_disk(package_dir: Path) -> Optional[str]:
+    try:
+        text = (package_dir / "__init__.py").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    match = _VERSION_LINE.search(text)
+    return match.group(1) if match else None
+
+
+def _replaced_on_disk(module) -> bool:
+    """Whether a copy this plugin loaded earlier has since been replaced.
+
+    Hermes reloads the plugin in a running gateway after an install or an
+    update, and evicts the plugin's own modules, but not the guard package,
+    which lives under a name of its own. Kept, the gateway went on deciding
+    with the old rules until it was restarted, while the plugin reported the
+    new version. A copy the host imported itself, from anywhere else, is
+    left alone.
+    """
+    try:
+        package_dir = Path(module.__file__).resolve().parent
+        ours = any(
+            package_dir == (location / _PACKAGE).resolve()
+            for location in _package_locations()
+        )
+    except Exception:
+        return False
+    if not ours:
+        return False
+    return _version_on_disk(package_dir) != getattr(module, "__version__", None)
+
+
+def _forget_package() -> None:
+    old = getattr(sys.modules.get(_PACKAGE), "__version__", None)
+    for loaded in [key for key in sys.modules if key == _PACKAGE or key.startswith(_PACKAGE + ".")]:
+        del sys.modules[loaded]
+    logger.warning("guard package %s was replaced on disk; loading the new copy", old)
+
+
 def _find_package() -> None:
     """Have the package loaded from the first usable location.
 
     Without one, the import below is left to whatever the interpreter finds:
     an installed package.
     """
-    if _PACKAGE in sys.modules:  # the host imported it itself
-        return
+    loaded = sys.modules.get(_PACKAGE)
+    if loaded is not None:
+        if not _replaced_on_disk(loaded):
+            return  # the host imported it itself, or it is still current
+        _forget_package()
     *installed, bundled = _package_locations()
     present = [loc for loc in installed if (loc / _PACKAGE / "__init__.py").is_file()]
     # The copy inside the plugin directory is for an install that has no
