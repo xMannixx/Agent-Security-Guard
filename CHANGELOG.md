@@ -6,6 +6,10 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-18
+
+**The plugin folder tests itself.** What the guard decides is unchanged.
+
 ### Changed
 
 - **The plugin folder carries its own tests.** `plugin/tests/` runs every hook

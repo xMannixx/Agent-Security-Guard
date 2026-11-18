@@ -379,6 +379,10 @@ No runtime dependencies — pure stdlib. `pytest` only for development.
 
 ## Status & roadmap
 
+v0.5.2 — the plugin folder, which is all a catalog install gets, carries its
+own tests (30, run on every platform in CI), and its entry file is split by
+job (43 KB → 25 KB). What the guard decides is unchanged.
+
 v0.5.1 — uses public Hermes surfaces only, as the plugin catalog requires. The
 MCP part of 0.5.0 read Hermes's private registry and is taken out: MCP tools
 are treated as in 0.4.4 again (declare them in `tool_tiers`, list them in

@@ -130,6 +130,11 @@ catalog allows public surfaces only, so 0.5.1 takes them out: InjecAgent via
 web page 561 / 1,054 again as shipped (1,054 with `mode: strict`). They come
 back once Hermes offers `readOnlyHint` and server trust on a public surface.
 
+## 0.5.2 — The plugin folder tests itself (done)
+
+Tests inside `plugin/tests/`, run from the plugin folder alone; the entry file
+split into the hooks and four helper files. No change to decisions.
+
 ## Next
 
 | Gap | Today | Target | Issue |
