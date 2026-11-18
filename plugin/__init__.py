@@ -43,6 +43,7 @@ import logging
 import os
 import sys
 import threading
+import time
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -106,6 +107,7 @@ from ._calls import (  # noqa: E402,F401
     _with_positional,
     _workspace_root,
 )
+from ._mode import rpc_handler as _rpc_handler  # noqa: E402
 from ._decisions import (  # noqa: E402,F401
     _APPROVED_PER_CALL,
     _NEEDS_USER_ORDER,
@@ -161,6 +163,10 @@ except Exception as exc:  # an older package, or none at all
 _adapter = None
 _config = None
 _config_error: Optional[str] = None
+# The policy file the adapter was built from, as (path, mtime, size). A change
+# (the Desktop page switching the mode, or an edit by hand) is picked up at the
+# next hook call instead of at the next restart of the gateway.
+_config_stamp: Optional[tuple] = None
 
 _SYSTEM_CONFIG = Path("/etc/agent-security-guard/guard.yaml")
 
@@ -200,49 +206,108 @@ def _warn_if_workspace_config_ignored(chosen: Optional[str]) -> None:
         pass
 
 
+def _policy_stamp() -> Optional[tuple]:
+    try:
+        path = _config_path()
+    except Exception:
+        return None
+    if path is None:
+        return (None,)
+    try:
+        info = os.stat(path)
+    except OSError:
+        return (path,)
+    return (path, info.st_mtime_ns, info.st_size)
+
+
+_adapter_lock = threading.Lock()
+_STAMP_INTERVAL = 1.0
+_stamp_checked_at = 0.0
+
+
 def _get_adapter():
-    global _adapter, _config, _config_error
+    """The guard, built from the policy file; rebuilt when that file changes."""
     if GuardAdapter is None:
         return None
-    if _adapter is None:
-        path = None
+    global _stamp_checked_at
+    current = _adapter
+    if current is not None:
+        # Looking at the file costs more than deciding a call; once a second
+        # is soon enough for a change the person made by hand or on the page.
+        now = time.monotonic()
+        if now - _stamp_checked_at < _STAMP_INTERVAL:
+            return current
+        _stamp_checked_at = now
+        if _policy_stamp() == _config_stamp:
+            return current
+    with _adapter_lock:
+        if _adapter is not None and _adapter is not current and _policy_stamp() == _config_stamp:
+            return _adapter  # another thread has just rebuilt it
+        return _build_adapter(_adapter)
+
+
+def _build_adapter(previous):
+    global _adapter, _config, _config_error, _config_stamp
+    if previous is not None:
+        logger.warning("guard policy changed (%s); loading it", _config_path())
+    _config_stamp = _policy_stamp()
+    path = None
+    try:
+        path = _config_path()
+        _warn_if_workspace_config_ignored(path)
+        _config = load_config(path)
+        _config_error = None
+    except Exception as exc:
+        # An unusable policy file must neither take the host down (0.2.x)
+        # nor leave it unguarded (0.3.0 skipped evaluation entirely): keep
+        # evaluating on the built-in defaults and report the error.
+        _config_error = f"{path}: {exc}"
+        logger.error(
+            "guard.yaml unusable (%s); enforcing built-in defaults", _config_error
+        )
+        _config = load_config(None)
+    # An unwritable audit sink must not cost the host its guard: audit is
+    # observability, not enforcement, so run without it if it cannot open.
+    audit = None
+    try:
+        audit = AuditLog(config=_config)
+    except Exception as exc:
+        logger.warning("audit log unavailable; continuing without it: %s", exc)
+    try:
+        # What the turns so far have read stays known across a rebuild: a
+        # changed mode must not forget outside content already in a turn.
+        history = previous.history if previous is not None else None
+        adapter = GuardAdapter(config=_config, audit=audit, history=history)
+    except Exception as exc:
+        logger.warning("GuardAdapter init failed: %s", exc)
+        return previous
+    _adapter = adapter
+    if previous is not None and previous.audit is not None:
         try:
-            path = _config_path()
-            _warn_if_workspace_config_ignored(path)
-            _config = load_config(path)
-            _config_error = None
-        except Exception as exc:
-            # An unusable policy file must neither take the host down (0.2.x)
-            # nor leave it unguarded (0.3.0 skipped evaluation entirely): keep
-            # evaluating on the built-in defaults and report the error.
-            _config_error = f"{path}: {exc}"
-            logger.error(
-                "guard.yaml unusable (%s); enforcing built-in defaults", _config_error
-            )
-            _config = load_config(None)
-        # An unwritable audit sink must not cost the host its guard: audit is
-        # observability, not enforcement, so run without it if it cannot open.
-        audit = None
-        try:
-            audit = AuditLog(config=_config)
-        except Exception as exc:
-            logger.warning("audit log unavailable; continuing without it: %s", exc)
-        try:
-            _adapter = GuardAdapter(config=_config, audit=audit)
-        except Exception as exc:
-            logger.warning("GuardAdapter init failed: %s", exc)
-            return None
-        if _adapter.mode_source == "env":
-            logger.warning(
-                "mode '%s' forced by AGENT_SECURITY_GUARD_MODE", _adapter.mode
-            )
-    return _adapter
+            previous.audit.close()  # reopens by itself if a call still in flight writes
+        except Exception:
+            pass
+    if adapter.mode_source == "env":
+        logger.warning("mode '%s' forced by AGENT_SECURITY_GUARD_MODE", adapter.mode)
+    return adapter
+
+
+# The Desktop page's mode switch (``_mode``), reached through plugin RPC.
+_mode_rpc = _rpc_handler(lambda: sys.modules[__name__], lambda: sys.modules[_PACKAGE])
 
 
 def register(ctx) -> None:
     """Entry point Hermes calls to wire the hooks."""
     ctx.register_hook("pre_llm_call", wrap_untrusted_context)
     ctx.register_hook("pre_tool_call", guard_tool_call)
+    # The Desktop page switches the mode through this method; Hermes serves it
+    # only to clients its gateway authenticated. Older hosts have no plugin RPC.
+    register_rpc = getattr(ctx, "register_rpc", None)
+    if callable(register_rpc):
+        try:
+            register_rpc("mode.set", _mode_rpc)
+        except Exception as exc:
+            logger.warning("mode.set RPC not registered: %s", exc)
     try:
         ctx.register_hook("transform_tool_result", wrap_tool_result)
     except Exception as exc:  # a host without this hook must keep the other two
