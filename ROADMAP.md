@@ -135,6 +135,11 @@ back once Hermes offers `readOnlyHint` and server trust on a public surface.
 Tests inside `plugin/tests/`, run from the plugin folder alone; the entry file
 split into the hooks and four helper files. No change to decisions.
 
+## 0.6.0 — A page in Hermes Desktop (done)
+
+Decisions with their reasons, the audit-trail check and the mode switch in
+Hermes Desktop; an update takes effect in a running gateway.
+
 ## Next
 
 | Gap | Today | Target | Issue |
