@@ -219,6 +219,20 @@ function Count({ label, value, variant }) {
   })
 }
 
+// relativeTime takes milliseconds. The trail stores ISO times; one that does
+// not parse shows nothing rather than breaking the page.
+function when(ts, lang) {
+  const ms = Date.parse(ts || '')
+  if (!Number.isFinite(ms)) {
+    return ''
+  }
+  try {
+    return relativeTime(ms, Date.now(), lang)
+  } catch {
+    return new Date(ms).toLocaleString()
+  }
+}
+
 function Decision({ item, lang, t }) {
   const reason = (REASONS[item.reason_code] && REASONS[item.reason_code][lang]) || item.message || item.reason_code
   return jsxs('div', {
@@ -243,7 +257,7 @@ function Decision({ item, lang, t }) {
           jsx('div', { style: { fontSize: '0.85rem', marginTop: '2px' }, children: reason }),
           jsx('div', {
             style: { ...muted, fontSize: '0.75rem', marginTop: '2px' },
-            children: jsx(Tip, { label: item.reason_code || '', children: jsx('span', { children: item.ts ? relativeTime(item.ts) : '' }) })
+            children: jsx(Tip, { label: item.reason_code || '', children: jsx('span', { children: when(item.ts, lang) }) })
           })
         ]
       })
@@ -358,6 +372,7 @@ function Page() {
                 jsx(SegmentedControl, {
                   value: scope,
                   onChange: setScope,
+                  sizing: 'content',
                   options: [
                     { id: 'attention', label: t.attention },
                     { id: 'all', label: t.all }
