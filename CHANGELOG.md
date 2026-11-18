@@ -6,6 +6,18 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **The plugin folder carries its own tests.** `plugin/tests/` runs every hook
+  from the plugin folder alone, as a catalog install has it: outside content
+  as data, attacks and phrasings after it, everyday work, the guard's own
+  files, secrets, the audit trail. CI runs them on every platform.
+- **The entry point is split by job.** `plugin/__init__.py` (43 KB) is now
+  the hooks and their wiring (25 KB); loading the package (`_loader.py`), the
+  degraded fallback (`_fallback.py`), reading a host's tool call (`_calls.py`)
+  and the result Hermes acts on (`_decisions.py`) are files of their own.
+  Nothing about what the guard decides has changed.
+
 ## [0.5.1] - 2026-11-12
 
 **Public Hermes surfaces only.** 0.5.0 read Hermes's private MCP registry

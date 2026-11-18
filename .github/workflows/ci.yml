@@ -49,3 +49,8 @@ jobs:
       - name: Run tests
         working-directory: security/agent-security-guard
         run: python -m pytest tests -v
+      # The tests that ship inside the plugin folder, which is all a catalog
+      # install of Hermes gets.
+      - name: Run the plugin folder's own tests
+        working-directory: plugin
+        run: python -m pytest tests -v

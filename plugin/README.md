@@ -111,6 +111,16 @@ one in your home, so an agent cannot switch its own guard off.
   `guard.yaml`, but write to the same trail. The root-owned policy in `/etc`
   applies to all of them.
 
+## Tests
+
+The plugin folder carries its own tests: every hook loaded from this folder
+alone, on the built-in policy, with the arguments Hermes passes. They cover
+outside content arriving as data, eleven kinds of attack and six phrasings
+after it, everyday work going unasked, the guard's own files, a secret sent
+out and the audit trail. Run them in the plugin directory:
+
+    python -m pytest tests
+
 ## More
 
 Full documentation, the rule set, the audit trail and the 1,400+ tests:
