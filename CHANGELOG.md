@@ -6,6 +6,15 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **An update now takes effect in a running gateway.** Hermes reloads the
+  plugin after an install or update, but the guard package kept in memory
+  stayed the old one: the gateway went on deciding with the old rules until
+  it was restarted. The plugin now notices that the copy it loaded was
+  replaced on disk and loads the new one. A package the host imported from
+  elsewhere is left alone.
+
 ### Added
 
 - **A Hermes Desktop page.** `plugin/desktop/plugin.js` adds a Security Guard
