@@ -1,0 +1,7 @@
+{
+  "name": "agent-security-guard-plugin",
+  "label": "Security Guard",
+  "description": "What the guard asked about, blocked and allowed, and whether its audit trail holds. Read only.",
+  "icon": "Shield",
+  "api": "plugin_api.py"
+}
