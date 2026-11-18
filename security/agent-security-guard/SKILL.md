@@ -1,7 +1,7 @@
 ---
 name: agent-security-guard
 description: "Runtime interaction guard for Hermes/OpenClaw: a deterministic transition policy engine that keeps reading, browsing, and summarizing free while stripping command-authority from untrusted content. Separates origin trust from data sensitivity, classifies actions into tiers, blocks dangerous kill-chains (read secret -> external post, web -> shell, download -> execute, untrusted -> privileged memory), wraps untrusted content as data (not instructions), and emits machine-readable decisions with audit. Default mode: autonomous-safe."
-version: 0.5.1
+version: 0.5.2
 author: xMannixx
 license: MIT
 platforms: [linux, macos, windows]
